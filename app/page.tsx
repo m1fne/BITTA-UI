@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 
 // Типы Telegram SDK
 declare global {
@@ -37,7 +37,10 @@ const adPartners = [
   },
 ];
 
-const shopProducts: Record<ShopType, { title: string; emoji: string; placeholder: string; packs: { name: string; price: string }[] }> = {
+const shopProducts: Record<
+  ShopType,
+  { title: string; emoji: string; placeholder: string; packs: { name: string; price: string }[] }
+> = {
   pubg: {
     title: "PUBG Mobile UC",
     emoji: "🔫",
@@ -143,6 +146,20 @@ const Icons = {
       <path d="M15 27l7 7 15-16" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="bt-check-path" />
     </svg>
   ),
+  Wallet: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="3" />
+      <path d="M16 12h.01" />
+      <path d="M18 8H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2z" />
+    </svg>
+  ),
+  Upload: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  ),
 };
 
 // ===================== ЦВЕТОВЫЕ ТЕМЫ =====================
@@ -167,6 +184,18 @@ const shopTheme: Record<ShopType, typeof themes.pink> = {
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userBalance, setUserBalance] = useState(0);
+
+  // ПОПОЛНЕНИЕ БАЛАНСА
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [topUpReceiptName, setTopUpReceiptName] = useState("");
+  const [topUpReceiptFile, setTopUpReceiptFile] = useState<File | null>(null);
+  const [topUpCopied, setTopUpCopied] = useState(false);
+  // idle -> submitting -> pending (ждём решения админа в Telegram) -> approved | rejected | error
+  const [topUpStatus, setTopUpStatus] = useState<"idle" | "submitting" | "pending" | "approved" | "rejected" | "error">("idle");
+  const [topUpError, setTopUpError] = useState("");
+  const [depositId, setDepositId] = useState<string | null>(null);
 
   // БАК 1: Маркет
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -201,11 +230,52 @@ export default function Home() {
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
       }
+      loadBalance();
     };
     document.body.appendChild(script);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Тактильный отклик Telegram — маленькая, но приятная деталь для "живого" интерфейса
+  const getInitData = (): string => {
+    if (typeof window === "undefined") return "";
+    return window.Telegram?.WebApp ? (window.Telegram.WebApp as any).initData ?? "" : "";
+  };
+
+  const loadBalance = async () => {
+    const initData = getInitData();
+    if (!initData) return;
+    try {
+      const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}`);
+      const data = await res.json();
+      if (res.ok && typeof data.balance === "number") setUserBalance(data.balance);
+    } catch {
+      // тихо игнорируем — попробуем при следующем действии
+    }
+  };
+
+  // Пока заявка на пополнение "на рассмотрении" — спрашиваем сервер, не решил ли админ.
+  useEffect(() => {
+    if (topUpStatus !== "pending" || !depositId) return;
+    const interval = setInterval(async () => {
+      const initData = getInitData();
+      try {
+        const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}&id=${depositId}`);
+        const data = await res.json();
+        if (res.ok && data.deposit?.status && data.deposit.status !== "pending") {
+          setTopUpStatus(data.deposit.status); // "approved" | "rejected"
+          if (data.deposit.status === "approved") {
+            haptic("success");
+            loadBalance();
+          }
+        }
+      } catch {
+        // попробуем на следующем тике
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topUpStatus, depositId]);
+
   const haptic = (type: "light" | "medium" | "success" = "light") => {
     const hf = typeof window !== "undefined" ? window.Telegram?.WebApp?.HapticFeedback : undefined;
     if (!hf) return;
@@ -237,6 +307,57 @@ export default function Home() {
     }
   };
 
+  // ПОПОЛНЕНИЕ БАЛАНСА
+  const handleOpenTopUp = () => {
+    haptic("light");
+    setIsTopUpOpen(true);
+    setTopUpStatus("idle");
+    setTopUpError("");
+    setDepositId(null);
+  };
+
+  const handleReceiptUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setTopUpReceiptName(e.target.files[0].name);
+      setTopUpReceiptFile(e.target.files[0]);
+      haptic("light");
+    }
+  };
+
+  const handleFinishTopUp = async () => {
+    const amount = parseInt(topUpAmount.replace(/[^\d]/g, ""), 10);
+    if (!amount || amount <= 0) {
+      haptic("medium");
+      alert("Iltimos, to'lov summasini kiriting!");
+      return;
+    }
+    const initData = getInitData();
+    setTopUpStatus("submitting");
+    setTopUpError("");
+    try {
+      const form = new FormData();
+      form.append("initData", initData);
+      form.append("amount", String(amount));
+      if (topUpReceiptFile) form.append("receipt", topUpReceiptFile);
+
+      const res = await fetch("/api/deposit", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) {
+        setTopUpStatus("error");
+        setTopUpError(data.error === "INVALID_AMOUNT" ? `Minimal summa: ${data.minAmount.toLocaleString("uz-UZ")} so'm` : "Xatolik yuz berdi");
+        haptic("medium");
+        return;
+      }
+      setDepositId(data.deposit.id);
+      setTopUpStatus("pending");
+      haptic("success");
+    } catch {
+      setTopUpStatus("error");
+      setTopUpError("Server bilan bog'lanib bo'lmadi");
+    }
+  };
+
+  // МАГАЗИН
   const handleOpenShop = (type: ShopType) => {
     haptic("light");
     setActiveShopType(type);
@@ -271,7 +392,7 @@ export default function Home() {
     };
     sendDataToBot(orderJSON);
     haptic("success");
-    setShopStep(4); // экран успеха с анимацией
+    setShopStep(4);
     setTimeout(() => {
       setIsShopOpen(false);
       setShopStep(1);
@@ -314,7 +435,7 @@ export default function Home() {
     }, 1800);
   };
 
-  // ===== Единый умный поиск по всему приложению (не только по рекламе) =====
+  // Поиск по всему приложению
   const searchCatalog = [
     { id: "g-pubg", group: "O'yin", theme: themes.pink, icon: Icons.Gamepad, title: "PUBG Mobile UC", desc: "UC hisobingizga to'ldiring", keywords: ["pubg", "uc", "oyin", "mobile"], action: () => handleOpenShop("pubg") },
     { id: "g-ff", group: "O'yin", theme: themes.gold, icon: Icons.Diamond, title: "Free Fire Almazlar", desc: "Almaz to'ldirish", keywords: ["free fire", "ff", "almaz", "diamond"], action: () => handleOpenShop("freefire") },
@@ -340,12 +461,11 @@ export default function Home() {
 
   return (
     <div style={styles.container}>
-      {/* ГЛОБАЛЬНЫЕ СТИЛИ: шрифты, keyframes, hover/active-анимации */}
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
         * { box-sizing: border-box; }
-        body { margin: 0; }
+        body { margin: 0; background-color: #120A21; }
         .bt-display { font-family: 'Fredoka', 'Plus Jakarta Sans', sans-serif; }
 
         @keyframes bt-float {
@@ -354,7 +474,6 @@ export default function Home() {
         }
         @keyframes bt-pop {
           0% { opacity: 0; transform: translateY(16px) scale(0.92); }
-          60% { opacity: 1; }
           100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         @keyframes bt-sheetUp {
@@ -373,31 +492,19 @@ export default function Home() {
           60% { transform: scale(1.12); opacity: 1; }
           100% { transform: scale(1); }
         }
-        @keyframes bt-wiggle {
-          0%, 100% { transform: rotate(0deg) scale(1); }
-          25% { transform: rotate(-8deg) scale(1.05); }
-          75% { transform: rotate(8deg) scale(1.05); }
-        }
-        @keyframes bt-spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         .bt-check-path { stroke-dasharray: 46; stroke-dashoffset: 46; animation: bt-check .5s .15s cubic-bezier(.65,0,.35,1) forwards; }
-
         .bt-blob { animation: bt-float 8s ease-in-out infinite; }
 
-        .bt-tile, .bt-row, .bt-primary-btn, .bt-pack-card, .bt-close-btn, .bt-copy-btn, .bt-nav-item, .bt-result-card, .bt-secondary-btn, .bt-tab-btn {
-          transition: transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .16s ease, border-color .16s ease, background .16s ease, opacity .16s ease;
+        .bt-tile, .bt-row, .bt-primary-btn, .bt-pack-card, .bt-close-btn, .bt-copy-btn, .bt-secondary-btn, .bt-tab-btn, .bt-quick-btn {
+          transition: transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .16s ease, border-color .16s ease, background .16s ease;
         }
-        .bt-tile:active, .bt-pack-card:active, .bt-primary-btn:active, .bt-secondary-btn:active, .bt-copy-btn:active, .bt-result-card:active, .bt-tab-btn:active { transform: scale(0.94); }
+        .bt-tile:active, .bt-pack-card:active, .bt-primary-btn:active, .bt-secondary-btn:active, .bt-copy-btn:active, .bt-tab-btn:active, .bt-quick-btn:active { transform: scale(0.94); }
         .bt-row:active { transform: scale(0.97); }
         .bt-close-btn:active { transform: scale(0.8) rotate(90deg); }
 
         .bt-tile:hover { transform: translateY(-4px) rotate(-1deg); }
-        .bt-tile:hover .bt-icon-badge { animation: bt-wiggle .5s ease; }
         .bt-row:hover { transform: translateX(3px); }
-        .bt-row:hover .bt-arrow { transform: translateX(4px); }
-        .bt-pack-card:hover { transform: translateY(-3px); }
-        .bt-result-card:hover { transform: translateX(3px); }
-
         .bt-primary-btn { position: relative; overflow: hidden; }
         .bt-primary-btn::after {
           content: ''; position: absolute; top: 0; left: 0; width: 45%; height: 100%;
@@ -405,19 +512,12 @@ export default function Home() {
           transform: translateX(-130%) skewX(-15deg);
         }
         .bt-primary-btn:hover::after { animation: bt-shine 1s ease; }
-
         .bt-search-input:focus { box-shadow: 0 0 0 3px rgba(184,139,255,.28); }
+        .bt-sheet { animation: bt-sheetUp .32s cubic-bezier(0, 0, 0.2, 1) forwards; }
+        .bt-backdrop { animation: bt-fadeIn .2s ease forwards; }
+      ` }} />
 
-        .bt-arrow { display: inline-flex; transition: transform .16s ease; }
-
-        @media (prefers-reduced-motion: reduce) {
-          .bt-blob, .bt-tile, .bt-row, .bt-primary-btn::after, .bt-check-path, .bt-card-in, .bt-sheet {
-            animation: none !important; transition: none !important;
-          }
-        }
-      `}</style>
-
-      {/* ФОНОВЫЕ РАЗМЫТЫЕ ПЯТНА — задают "живое" настроение всей страницы */}
+      {/* ФОНОВЫЕ ПЯТНА */}
       <div style={styles.bgLayer} aria-hidden="true">
         <div className="bt-blob" style={{ ...styles.blob, width: 260, height: 260, top: -80, left: -60, background: themes.pink.grad }} />
         <div className="bt-blob" style={{ ...styles.blob, width: 220, height: 220, top: 140, right: -90, background: themes.violet.grad, animationDelay: "1.5s" }} />
@@ -425,10 +525,10 @@ export default function Home() {
       </div>
 
       <div style={styles.content}>
-        {/* HEADER */}
+        {/* ХЕДЕР */}
         <header style={styles.header}>
           <div style={styles.logoWrap}>
-            <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad, animationDuration: "5s" }}>
+            <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad }}>
               <Icons.Sparkle />
             </span>
             <span className="bt-display" style={styles.logoText}>bitta</span>
@@ -449,6 +549,12 @@ export default function Home() {
             )}
           </div>
 
+          {/* КНОПКА ПОПОЛНЕНИЯ БАЛАНСА В ХЕДЕРЕ */}
+          <button style={styles.topUpHeaderBtn} className="bt-primary-btn" onClick={handleOpenTopUp}>
+            <Icons.Wallet />
+            <span>{userBalance.toLocaleString("uz-UZ")} UZS</span>
+          </button>
+
           <button style={styles.burgerButton} className="bt-secondary-btn" onClick={() => { haptic("light"); setIsMenuOpen(true); }}>
             <div style={styles.burgerLine}></div>
             <div style={{ ...styles.burgerLine, width: "16px" }}></div>
@@ -457,12 +563,12 @@ export default function Home() {
 
         {/* РЕЗУЛЬТАТЫ ПОИСКА */}
         {q !== "" ? (
-          <div style={styles.resultsSection} className="bt-card-in">
+          <div style={styles.resultsSection}>
             <div style={styles.resultsHeader}>Qidiruv natijalari</div>
             {filteredResults.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {filteredResults.map((item) => (
-                  <div key={item.id} style={styles.resultCard} className="bt-result-card" onClick={() => runResult(item.action)}>
+                  <div key={item.id} style={styles.resultCard} className="bt-row" onClick={() => runResult(item.action)}>
                     <div style={{ ...styles.resultIconBadge, background: item.theme.grad, boxShadow: `0 6px 16px ${item.theme.glow}` }}>
                       <item.icon />
                     </div>
@@ -471,7 +577,7 @@ export default function Home() {
                       <div style={styles.resultTitle}>{item.title}</div>
                       <div style={styles.resultDesc}>{item.desc}</div>
                     </div>
-                    <span className="bt-arrow" style={styles.arrowRight}>→</span>
+                    <span style={styles.arrowRight}>→</span>
                   </div>
                 ))}
               </div>
@@ -481,21 +587,21 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* HERO — характерная сцена приложения */}
-            <section style={styles.hero} className="bt-card-in">
+            {/* HERO */}
+            <section style={styles.hero}>
               <div style={styles.heroBadge}><Icons.Sparkle /> Bitta ilovada — hammasi</div>
               <h1 className="bt-display" style={styles.heroTitle}>Nimadan boshlaymiz?</h1>
-              <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda, bir necha bosishda 🎉</p>
+              <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda 🎉</p>
             </section>
 
-            {/* БАК №1: МАРКЕТ И ДОНАТ */}
-            <section style={styles.sectionBlock} className="bt-card-in">
+            {/* ДOНАT */}
+            <section style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
                 <span style={{ ...styles.sectionLabel, background: "rgba(255,95,126,.14)", color: "#FF9DAF" }}>🎮 O'yin & Donat</span>
               </div>
               <div style={styles.tileGrid}>
                 <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
-                  <div className="bt-icon-badge" style={{ ...styles.tileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
+                  <div style={{ ...styles.tileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
                     <Icons.Gamepad />
                   </div>
                   <span style={styles.tileTitle}>PUBG Mobile</span>
@@ -503,7 +609,7 @@ export default function Home() {
                 </button>
 
                 <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("freefire")}>
-                  <div className="bt-icon-badge" style={{ ...styles.tileIconBadge, background: themes.gold.grad, boxShadow: `0 8px 18px ${themes.gold.glow}` }}>
+                  <div style={{ ...styles.tileIconBadge, background: themes.gold.grad, boxShadow: `0 8px 18px ${themes.gold.glow}` }}>
                     <Icons.Diamond />
                   </div>
                   <span style={styles.tileTitle}>Free Fire</span>
@@ -511,7 +617,7 @@ export default function Home() {
                 </button>
 
                 <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("premium")}>
-                  <div className="bt-icon-badge" style={{ ...styles.tileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
+                  <div style={{ ...styles.tileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
                     <Icons.Premium />
                   </div>
                   <span style={styles.tileTitle}>TG Premium</span>
@@ -519,7 +625,7 @@ export default function Home() {
                 </button>
 
                 <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("steam")}>
-                  <div className="bt-icon-badge" style={{ ...styles.tileIconBadge, background: themes.blue.grad, boxShadow: `0 8px 18px ${themes.blue.glow}` }}>
+                  <div style={{ ...styles.tileIconBadge, background: themes.blue.grad, boxShadow: `0 8px 18px ${themes.blue.glow}` }}>
                     <Icons.Steam />
                   </div>
                   <span style={styles.tileTitle}>Steam</span>
@@ -528,55 +634,55 @@ export default function Home() {
               </div>
             </section>
 
-            {/* БАК №2: ОБУЧЕНИЕ */}
-            <section style={styles.sectionBlock} className="bt-card-in">
+            {/* ОБУЧЕНИЕ */}
+            <section style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
                 <span style={{ ...styles.sectionLabel, background: "rgba(55,229,196,.14)", color: "#7FF0D9" }}>📚 Ta'lim & Imtihon</span>
               </div>
               <div style={styles.rowList}>
                 <button style={styles.row} className="bt-row" onClick={() => openLinkInside("https://ielts.gg")}>
-                  <div className="bt-icon-badge" style={{ ...styles.rowIconBadge, background: themes.teal.grad, boxShadow: `0 6px 14px ${themes.teal.glow}` }}>
+                  <div style={{ ...styles.rowIconBadge, background: themes.teal.grad, boxShadow: `0 6px 14px ${themes.teal.glow}` }}>
                     <Icons.Book />
                   </div>
                   <div style={styles.rowBody}>
                     <span style={styles.rowTitle}>IELTS.GG</span>
                     <span style={styles.rowSub}>Professional IELTS imtihoniga tayyorgarlik</span>
                   </div>
-                  <span className="bt-arrow" style={styles.arrowRight}>→</span>
+                  <span style={styles.arrowRight}>→</span>
                 </button>
 
                 <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("cefr")}>
-                  <div className="bt-icon-badge" style={{ ...styles.rowIconBadge, background: themes.violet.grad, boxShadow: `0 6px 14px ${themes.violet.glow}` }}>
+                  <div style={{ ...styles.rowIconBadge, background: themes.violet.grad, boxShadow: `0 6px 14px ${themes.violet.glow}` }}>
                     <Icons.Book />
                   </div>
                   <div style={styles.rowBody}>
                     <span style={styles.rowTitle}>CEFR Imtihonlari</span>
                     <span style={styles.rowSub}>Milliy sertifikat imtihon materiallari</span>
                   </div>
-                  <span className="bt-arrow" style={styles.arrowRight}>→</span>
+                  <span style={styles.arrowRight}>→</span>
                 </button>
 
                 <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("prava")}>
-                  <div className="bt-icon-badge" style={{ ...styles.rowIconBadge, background: themes.gold.grad, boxShadow: `0 6px 14px ${themes.gold.glow}` }}>
+                  <div style={{ ...styles.rowIconBadge, background: themes.gold.grad, boxShadow: `0 6px 14px ${themes.gold.glow}` }}>
                     <Icons.Pravaga />
                   </div>
                   <div style={styles.rowBody}>
                     <span style={styles.rowTitle}>Pravaga Tayyorgarlik</span>
                     <span style={styles.rowSub}>Avtomobil imtihoni (GAI) testlari</span>
                   </div>
-                  <span className="bt-arrow" style={styles.arrowRight}>→</span>
+                  <span style={styles.arrowRight}>→</span>
                 </button>
               </div>
             </section>
 
-            {/* БАК №3: ВАКАНСИИ */}
-            <section style={styles.sectionBlock} className="bt-card-in">
+            {/* ВАКАНСИИ */}
+            <section style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
                 <span style={{ ...styles.sectionLabel, background: "rgba(185,139,255,.14)", color: "#D5BCFF" }}>💼 Ishga Vakansiya</span>
               </div>
               <div style={styles.vacancyGrid}>
                 <button style={styles.tile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); }}>
-                  <div className="bt-icon-badge" style={{ ...styles.tileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
+                  <div style={{ ...styles.tileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
                     <Icons.Briefcase />
                   </div>
                   <span style={styles.tileTitle}>Ish topish</span>
@@ -584,7 +690,7 @@ export default function Home() {
                 </button>
 
                 <button style={styles.tile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("worker"); setIsVacancyOpen(true); }}>
-                  <div className="bt-icon-badge" style={{ ...styles.tileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
+                  <div style={{ ...styles.tileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
                     <Icons.Briefcase />
                   </div>
                   <span style={styles.tileTitle}>Ishga olish</span>
@@ -593,8 +699,8 @@ export default function Home() {
               </div>
             </section>
 
-            {/* БАК №4: РЕКЛАМА */}
-            <section style={{ marginBottom: "8px" }} className="bt-card-in">
+            {/* РЕКЛАМА */}
+            <section style={{ marginBottom: "20px" }}>
               <div style={styles.promoCard} className="bt-tile" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
                 <div style={styles.promoBadge}><Icons.Sparkle /> Reklama xizmati</div>
                 <div style={styles.promoTitle}>Bitta-da o'z brendingizni e'lon qiling!</div>
@@ -606,7 +712,143 @@ export default function Home() {
         )}
       </div>
 
-      {/* ШТОРКА МАГАЗИНА */}
+      {/* ===================== МОДАЛЬНОЕ ОКНО: BALANS TO'LDIRISH ===================== */}
+      {isTopUpOpen && (
+        <>
+          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsTopUpOpen(false)} />
+          <div style={styles.bottomSheet} className="bt-sheet">
+            <div style={styles.sheetIndicator}></div>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalLogo}>💳 Balans to'ldirish</div>
+              {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected") && (
+                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsTopUpOpen(false)}>✕</button>
+              )}
+            </div>
+
+            {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") ? (
+              <div style={styles.sheetBody}>
+                {/* КАРТОЧКА ДЛЯ ОПЛАТЫ */}
+                <div style={styles.paymentCard}>
+                  <p style={styles.paymentText}>
+                    Plastik kartamizga to'lovni amalga oshiring:
+                  </p>
+                  <div style={styles.cardBox}>
+                    <span style={styles.cardNumber}>8600 4910 2345 6789</span>
+                    <button
+                      style={styles.copyBtn}
+                      className="bt-copy-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText("8600491023456789");
+                        haptic("light");
+                        setTopUpCopied(true);
+                        setTimeout(() => setTopUpCopied(false), 1500);
+                      }}
+                    >
+                      {topUpCopied ? "Nusxalandi! ✅" : "Nusxa olish"}
+                    </button>
+                  </div>
+                  <div style={styles.cardHolder}>Karta egasi: MUSA A.</div>
+                </div>
+
+                {/* ВВОД СУММЫ */}
+                <div style={{ marginTop: "16px" }}>
+                  <label style={styles.inputLabel}>To'lov summasi (UZS):</label>
+                  <input
+                    type="number"
+                    placeholder="Masalan: 50000"
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                    style={styles.input}
+                    className="bt-search-input"
+                  />
+                  {/* КНОПКИ БЫСТРОГО ВЫБОРА СУММЫ */}
+                  <div style={styles.quickAmountRow}>
+                    {["10000", "25000", "50000", "100000"].map((amt) => (
+                      <button
+                        key={amt}
+                        style={styles.quickAmountBtn}
+                        className="bt-quick-btn"
+                        onClick={() => {
+                          setTopUpAmount(amt);
+                          haptic("light");
+                        }}
+                      >
+                        +{parseInt(amt).toLocaleString("uz-UZ")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ЗАГРУЗКА ЧЕКА */}
+                <div style={{ marginTop: "16px" }}>
+                  <label style={styles.inputLabel}>To'lov chekini yuklang (rasm):</label>
+                  <label style={styles.fileUploadBox} className="bt-tile">
+                    <Icons.Upload />
+                    <span style={{ fontSize: "13px", fontWeight: 600 }}>
+                      {topUpReceiptName ? `📄 ${topUpReceiptName}` : "Chek rasmini tanlang"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReceiptUpload}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+
+                {topUpStatus === "error" && (
+                  <p style={{ color: "#FF9DAF", fontSize: "12px", marginTop: "10px" }}>{topUpError}</p>
+                )}
+
+                {/* КНОПКА ПОДТВЕРЖДЕНИЯ */}
+                <button
+                  style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px", opacity: topUpStatus === "submitting" ? 0.7 : 1 }}
+                  className="bt-primary-btn"
+                  onClick={handleFinishTopUp}
+                  disabled={topUpStatus === "submitting"}
+                >
+                  {topUpStatus === "submitting" ? "Yuborilmoqda..." : "To'lovni tasdiqlash 🚀"}
+                </button>
+              </div>
+            ) : topUpStatus === "pending" ? (
+              <div style={styles.successBox}>
+                <div style={{ color: "#FFD166", marginBottom: "12px", fontSize: "40px" }}>⏳</div>
+                <div style={styles.successTitle}>Tekshirilmoqda...</div>
+                <div style={styles.successSub}>
+                  To'lov so'rovingiz adminga yuborildi. Tasdiqlangach bu oyna avtomatik yangilanadi — hech narsa qilish shart emas.
+                </div>
+              </div>
+            ) : topUpStatus === "approved" ? (
+              <div style={styles.successBox}>
+                <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
+                  <Icons.Check />
+                </div>
+                <div style={styles.successTitle}>Balans to'ldirildi! ✅</div>
+                <div style={styles.successSub}>
+                  Joriy balansingiz: <strong style={{ color: "#3DDC97" }}>{userBalance.toLocaleString("uz-UZ")} UZS</strong>
+                </div>
+              </div>
+            ) : (
+              <div style={styles.successBox}>
+                <div style={{ color: "#FF9DAF", marginBottom: "12px", fontSize: "40px" }}>❌</div>
+                <div style={styles.successTitle}>So'rov rad etildi</div>
+                <div style={styles.successSub}>
+                  To'lov tasdiqlanmadi. Agar bu xato bo'lsa, @bitta_mngr ga yozing yoki qaytadan urinib ko'ring.
+                </div>
+                <button
+                  style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "16px" }}
+                  className="bt-primary-btn"
+                  onClick={handleOpenTopUp}
+                >
+                  Qayta urinish
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ===================== МОДАЛЬНОЕ ОКНО: МАГАЗИН ===================== */}
       {isShopOpen && activeShopType && (
         <>
           <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsShopOpen(false)} />
@@ -619,7 +861,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Шаг 1: выбор пака */}
             {shopStep === 1 && (
               <div style={styles.sheetBody}>
                 <p style={styles.subLabel}>Tarifni tanlang</p>
@@ -627,14 +868,13 @@ export default function Home() {
                   {shopProducts[activeShopType].packs.map((pack, idx) => (
                     <button key={idx} style={styles.packCard} className="bt-pack-card" onClick={() => handleSelectPack(pack)}>
                       <div style={styles.packName}>{pack.name}</div>
-                      <div style={{ ...styles.packPrice, color: shopTheme[activeShopType].grad ? "#3DDC97" : "#3DDC97" }}>{pack.price}</div>
+                      <div style={styles.packPrice}>{pack.price}</div>
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Шаг 2: ввод данных */}
             {shopStep === 2 && selectedPack && (
               <div style={styles.sheetBody}>
                 <div style={styles.orderSummary}>
@@ -655,7 +895,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Шаг 3: оплата */}
             {shopStep === 3 && selectedPack && (
               <div style={styles.sheetBody}>
                 <div style={styles.paymentCard}>
@@ -664,164 +903,233 @@ export default function Home() {
                   </p>
                   <div style={styles.cardBox}>
                     <span style={styles.cardNumber}>8600 4910 2345 6789</span>
-                    <button
-                      style={styles.copyBtn}
-                      className="bt-copy-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText("8600491023456789");
-                        haptic("light");
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1500);
-                      }}
-                    >
+                    <button style={styles.copyBtn} className="bt-copy-btn" onClick={() => {
+                      navigator.clipboard.writeText("8600491023456789");
+                      haptic("light");
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    }}>
                       {copied ? "Nusxalandi! ✅" : "Nusxa olish"}
                     </button>
                   </div>
                   <div style={styles.cardHolder}>Karta egasi: MUSA A.</div>
-                  <p style={styles.warningText}>To'lovdan so'ng chekni rasmga oling va "To'lov qildim" tugmasini bosing.</p>
                 </div>
-                <button style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, width: "100%" }} className="bt-primary-btn" onClick={handleFinishOrder}>
-                  To'lov qildim ✅
+
+                <button style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, width: "100%", marginTop: "16px" }} className="bt-primary-btn" onClick={handleFinishOrder}>
+                  To'lovni tasdiqlash
                 </button>
               </div>
             )}
 
-            {/* Шаг 4: успех */}
             {shopStep === 4 && (
-              <div style={styles.successWrap}>
-                <div style={{ ...styles.successIconWrap, background: shopTheme[activeShopType].grad, boxShadow: `0 10px 30px ${shopTheme[activeShopType].glow}` }}>
+              <div style={styles.successBox}>
+                <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
                   <Icons.Check />
                 </div>
-                <div className="bt-display" style={styles.successTitle}>Ajoyib! 🎉</div>
-                <p style={styles.successSub}>Buyurtmangiz qabul qilindi. Operator tez orada siz bilan bog'lanadi.</p>
+                <div style={styles.successTitle}>Buyurtma qabul qilindi!</div>
+                <div style={styles.successSub}>Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.</div>
               </div>
             )}
           </div>
         </>
       )}
 
-      {/* ШТОРКА ОБУЧЕНИЯ */}
+      {/* ===================== МОДАЛЬНОЕ ОКНО: ОБУЧЕНИЕ ===================== */}
       {isEduOpen && eduType && (
         <>
           <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsEduOpen(false)} />
           <div style={styles.bottomSheet} className="bt-sheet">
             <div style={styles.sheetIndicator}></div>
             <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>{eduType === "cefr" ? "📘 CEFR Imtihonlari" : "🚗 Pravaga Tayyorgarlik"}</div>
+              <div style={styles.modalLogo}>
+                {eduType === "cefr" ? "📚 CEFR Imtihonlari" : "🚗 Pravaga Tayyorgarlik"}
+              </div>
               <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsEduOpen(false)}>✕</button>
             </div>
             <div style={styles.sheetBody}>
-              <p style={styles.eduText}>
-                {eduType === "cefr"
-                  ? "Milliy CEFR imtihonlariga tayyorgarlik ko'rish uchun eng so'nggi testlar, audio materiallar va o'quv qo'llanmalari. Quyidagi tugma orqali bepul resurslar kanalimizga o'ting."
-                  : "Yo'l harakati qoidalari (YHQ) va imtihon savollarining to'liq to'plami. Nazariy imtihonni 100% topshirish uchun eng yangi va interaktiv test tizimi."}
-              </p>
+              <div style={styles.eduInfoCard}>
+                <p style={{ margin: "0 0 8px 0", color: "#E0D7F5", fontSize: "14px", lineHeight: 1.5 }}>
+                  {eduType === "cefr"
+                    ? "CEFR B1, B2, C1 darajadagi testlar, audio materiallar va mock imtihon topshirish bo'limi."
+                    : "Yo'l harakati qoidalari (YHQ), GAI kompyuter imtihoni testlari va bilimlarni sinash boti."}
+                </p>
+              </div>
               <button
-                style={{ ...styles.btnPrimary, width: "100%", background: eduType === "cefr" ? themes.teal.grad : themes.gold.grad }}
+                style={{ ...styles.btnPrimary, background: themes.teal.grad, width: "100%", marginTop: "12px" }}
                 className="bt-primary-btn"
-                onClick={() => { openTelegramLink("https://t.me/bitta_mngr"); setIsEduOpen(false); }}
+                onClick={() => {
+                  haptic("light");
+                  openTelegramLink(eduType === "cefr" ? "https://t.me/bitta_cefr_bot" : "https://t.me/bitta_prava_bot");
+                }}
               >
-                Kanalga o'tish (Bepul) 🚀
+                Botda Mashq Qilish 🚀
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* ШТОРКА ВАКАНСИЙ */}
+      {/* ===================== МОДАЛЬНОЕ ОКНО: ВАКАНСИИ ===================== */}
       {isVacancyOpen && (
         <>
           <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsVacancyOpen(false)} />
-          <div style={{ ...styles.bottomSheet, maxHeight: "85vh" }} className="bt-sheet">
+          <div style={styles.bottomSheet} className="bt-sheet">
             <div style={styles.sheetIndicator}></div>
             <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>💼 Bitta Work</div>
-              {!vacSubmitted && (
-                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsVacancyOpen(false)}>✕</button>
-              )}
+              <div style={styles.modalLogo}>💼 Vakansiyalar va Ishlar</div>
+              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsVacancyOpen(false)}>✕</button>
             </div>
 
-            {vacSubmitted ? (
-              <div style={styles.successWrap}>
-                <div style={{ ...styles.successIconWrap, background: themes.violet.grad, boxShadow: `0 10px 30px ${themes.violet.glow}` }}>
-                  <Icons.Check />
-                </div>
-                <div className="bt-display" style={styles.successTitle}>E'lon joylandi! 🎉</div>
-                <p style={styles.successSub}>Tez orada qiziqqan odamlar siz bilan bog'lanishadi.</p>
-              </div>
-            ) : !isCreatingVacancy ? (
-              <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
-                <div style={styles.tabRow}>
-                  <button style={{ ...styles.tab, ...(vacancyTab === "job" ? styles.tabActive : {}) }} className="bt-tab-btn" onClick={() => setVacancyTab("job")}>
-                    Vakansiyalar
-                  </button>
-                  <button style={{ ...styles.tab, ...(vacancyTab === "worker" ? styles.tabActive : {}) }} className="bt-tab-btn" onClick={() => setVacancyTab("worker")}>
-                    Rezyumelar
-                  </button>
-                </div>
+            <div style={styles.sheetBody}>
+              {!isCreatingVacancy ? (
+                <>
+                  <div style={styles.tabRow}>
+                    <button
+                      style={{ ...styles.tabBtn, ...(vacancyTab === "job" ? styles.tabBtnActive : {}) }}
+                      className="bt-tab-btn"
+                      onClick={() => { haptic("light"); setVacancyTab("job"); }}
+                    >
+                      Bo'sh ish o'rinlari
+                    </button>
+                    <button
+                      style={{ ...styles.tabBtn, ...(vacancyTab === "worker" ? styles.tabBtnActive : {}) }}
+                      className="bt-tab-btn"
+                      onClick={() => { haptic("light"); setVacancyTab("worker"); }}
+                    >
+                      Xodimlar (Rezyume)
+                    </button>
+                  </div>
 
-                <div style={styles.vacList}>
-                  {mockVacancies.filter((v) => v.type === vacancyTab).map((v) => (
-                    <div key={v.id} style={styles.vacCard} className="bt-row">
-                      <div style={styles.vacRow}>
-                        <span style={styles.vacTitle}>{v.title}</span>
-                        <span style={styles.vacBudget}>{v.budget}</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "240px", overflowY: "auto", margin: "14px 0" }}>
+                    {mockVacancies.filter(v => v.type === vacancyTab).map(vac => (
+                      <div key={vac.id} style={styles.vacCard}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={styles.vacTitle}>{vac.title}</div>
+                          <div style={styles.vacBudget}>{vac.budget}</div>
+                        </div>
+                        <div style={styles.vacDesc}>{vac.desc}</div>
+                        <button
+                          style={styles.vacApplyBtn}
+                          className="bt-secondary-btn"
+                          onClick={() => openTelegramLink(`https://t.me/${vac.contact.replace('@', '')}`)}
+                        >
+                          Bog'lanish ({vac.contact})
+                        </button>
                       </div>
-                      <p style={styles.vacDesc}>{v.desc}</p>
-                      <button style={styles.vacApplyBtn} className="bt-secondary-btn" onClick={() => openTelegramLink(`https://t.me/${v.contact.replace("@", "")}`)}>
-                        Bog'lanish ({v.contact})
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <button style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }} className="bt-primary-btn" onClick={() => setIsCreatingVacancy(true)}>
-                  E'lon joylashtirish
-                </button>
-              </div>
-            ) : (
-              <div style={styles.sheetBody}>
-                <div style={styles.tabRow}>
-                  <button style={{ ...styles.tab, ...(newVacType === "job" ? styles.tabActive : {}) }} className="bt-tab-btn" onClick={() => setNewVacType("job")}>
-                    Vakansiya
+                  <button
+                    style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }}
+                    className="bt-primary-btn"
+                    onClick={() => { haptic("light"); setIsCreatingVacancy(true); }}
+                  >
+                    + Yangi e'lon joylash
                   </button>
-                  <button style={{ ...styles.tab, ...(newVacType === "worker" ? styles.tabActive : {}) }} className="bt-tab-btn" onClick={() => setNewVacType("worker")}>
-                    Rezyume
-                  </button>
+                </>
+              ) : vacSubmitted ? (
+                <div style={styles.successBox}>
+                  <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
+                    <Icons.Check />
+                  </div>
+                  <div style={styles.successTitle}>E'loningiz yuborildi!</div>
+                  <div style={styles.successSub}>Moderatorlar ko'rib chiqqach e'lon kanalda va ilovada paydo bo'ladi.</div>
                 </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#fff", marginBottom: "12px" }}>E'lon berish</div>
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                    <button
+                      style={{ ...styles.tabBtn, flex: 1, ...(newVacType === "job" ? styles.tabBtnActive : {}) }}
+                      onClick={() => setNewVacType("job")}
+                    >
+                      Ish taklif etaman
+                    </button>
+                    <button
+                      style={{ ...styles.tabBtn, flex: 1, ...(newVacType === "worker" ? styles.tabBtnActive : {}) }}
+                      onClick={() => setNewVacType("worker")}
+                    >
+                      Ish qidiryapman
+                    </button>
+                  </div>
 
-                <input type="text" placeholder="Sarlavha (masalan: Designer kerak)" value={newVacTitle} onChange={(e) => setNewVacTitle(e.target.value)} style={styles.input} className="bt-search-input" />
-                <input type="text" placeholder="Narxi / Maosh" value={newVacBudget} onChange={(e) => setNewVacBudget(e.target.value)} style={styles.input} className="bt-search-input" />
-                <textarea placeholder="Batafsil tavsif va talablar..." value={newVacDesc} onChange={(e) => setNewVacDesc(e.target.value)} style={{ ...styles.input, height: "70px", resize: "none" }} className="bt-search-input" />
-                <input type="text" placeholder="Telegram Username (masalan: @musa)" value={newVacContact} onChange={(e) => setNewVacContact(e.target.value)} style={styles.input} className="bt-search-input" />
+                  <input
+                    type="text"
+                    placeholder="Sarlavha (masalan: Dizayner kerak)"
+                    value={newVacTitle}
+                    onChange={e => setNewVacTitle(e.target.value)}
+                    style={{ ...styles.input, marginBottom: "8px" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Maosh / Byudjet (masalan: 1,000,000 UZS)"
+                    value={newVacBudget}
+                    onChange={e => setNewVacBudget(e.target.value)}
+                    style={{ ...styles.input, marginBottom: "8px" }}
+                  />
+                  <textarea
+                    placeholder="Batafsil ma'lumot..."
+                    value={newVacDesc}
+                    onChange={e => setNewVacDesc(e.target.value)}
+                    style={{ ...styles.input, height: "60px", marginBottom: "8px", resize: "none" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Aloqa uchun Telegram (masalan: @username)"
+                    value={newVacContact}
+                    onChange={e => setNewVacContact(e.target.value)}
+                    style={{ ...styles.input, marginBottom: "14px" }}
+                  />
 
-                <div style={styles.btnRow}>
-                  <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setIsCreatingVacancy(false)}>Bekor qilish</button>
-                  <button style={{ ...styles.btnPrimary, background: themes.violet.grad }} className="bt-primary-btn" onClick={handleCreateVacancy}>Joylashtirish</button>
+                  <div style={styles.btnRow}>
+                    <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setIsCreatingVacancy(false)}>Bekor qilish</button>
+                    <button style={{ ...styles.btnPrimary, background: themes.violet.grad }} className="bt-primary-btn" onClick={handleCreateVacancy}>Tasdiqlash</button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </>
       )}
 
-      {/* МЕНЮ */}
+      {/* ===================== БОКОВОЕ МЕНЮ ===================== */}
       {isMenuOpen && (
         <>
           <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsMenuOpen(false)} />
-          <div style={styles.drawer} className="bt-sheet">
+          <div style={styles.drawer}>
             <div style={styles.drawerHeader}>
-              <span className="bt-display" style={styles.drawerTitle}>Menyu</span>
+              <div style={styles.drawerTitle}>Menyu</div>
               <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsMenuOpen(false)}>✕</button>
             </div>
-            <nav style={styles.drawerNav}>
-              <button style={styles.navItem} className="bt-nav-item bt-row" onClick={() => alert("O'zbek tili faollashtirildi")}>
-                <span style={{ ...styles.navIconBadge, background: themes.blue.grad }}>🌐</span> O'zbekcha
-              </button>
-              <button style={styles.navItem} className="bt-nav-item bt-row" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
-                <span style={{ ...styles.navIconBadge, background: themes.pink.grad }}>💬</span> Bog'lanish
-              </button>
-            </nav>
+
+            <div style={styles.drawerBody}>
+              {/* БАЛАНС В МЕНЮ */}
+              <div style={styles.menuBalanceCard}>
+                <div style={{ fontSize: "12px", color: "#A79FC2" }}>Hisobingiz:</div>
+                <div style={{ fontSize: "18px", fontWeight: 700, color: "#3DDC97", margin: "2px 0 8px 0" }}>
+                  {userBalance.toLocaleString("uz-UZ")} UZS
+                </div>
+                <button
+                  style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", padding: "8px", fontSize: "12px" }}
+                  className="bt-primary-btn"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleOpenTopUp();
+                  }}
+                >
+                  💳 Balansni to'ldirish
+                </button>
+              </div>
+
+              <div style={styles.menuList}>
+                <button style={styles.menuItem} onClick={() => { setIsMenuOpen(false); openTelegramLink("https://t.me/bitta_mngr"); }}>
+                  🎧 Qo'llab-quvvatlash (@bitta_mngr)
+                </button>
+                <button style={styles.menuItem} onClick={() => { setIsMenuOpen(false); openTelegramLink("https://t.me/bitta_official"); }}>
+                  📢 Rasmiy kanal
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -829,567 +1137,664 @@ export default function Home() {
   );
 }
 
-// ===================== СТИЛИ =====================
+// ===================== СТИЛИ (JS OBJECT) =====================
 
-const styles: { [key: string]: React.CSSProperties } = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
-    position: "relative",
     minHeight: "100vh",
-    backgroundColor: "#120B1F",
-    color: "#F4F1FA",
-    fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    backgroundColor: "#120A21",
+    color: "#FFFFFF",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    position: "relative",
     overflowX: "hidden",
+    paddingBottom: "40px",
   },
   bgLayer: {
     position: "fixed",
-    inset: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: "none",
     zIndex: 0,
     overflow: "hidden",
-    pointerEvents: "none",
   },
   blob: {
     position: "absolute",
     borderRadius: "50%",
-    filter: "blur(70px)",
+    filter: "blur(65px)",
     opacity: 0.35,
   },
   content: {
     position: "relative",
     zIndex: 1,
-    padding: "20px 16px 40px 16px",
+    maxWidth: "480px",
+    margin: "0 auto",
+    padding: "16px 16px",
   },
-
-  // HEADER
   header: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: "10px",
-    marginBottom: "18px",
+    gap: "8px",
+    marginBottom: "16px",
   },
   logoWrap: {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "6px",
   },
   logoDot: {
-    width: "26px",
-    height: "26px",
-    borderRadius: "9px",
+    width: "28px",
+    height: "28px",
+    borderRadius: "8px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#120B1F",
+    color: "#fff",
   },
   logoText: {
-    fontSize: "21px",
+    fontSize: "20px",
     fontWeight: 700,
-    color: "#ffffff",
-    letterSpacing: "-0.3px",
+    background: "linear-gradient(135deg, #FFFFFF, #B98BFF)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
   },
   searchWrapper: {
+    flex: 1,
     position: "relative",
-    flexGrow: 1,
-    maxWidth: "170px",
+    display: "flex",
+    alignItems: "center",
   },
   searchIcon: {
     position: "absolute",
-    left: "12px",
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: "#8B84A6",
+    left: "10px",
+    color: "#7E7694",
     display: "flex",
     alignItems: "center",
   },
   searchInput: {
     width: "100%",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.07)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     borderRadius: "12px",
-    padding: "9px 12px 9px 34px",
-    color: "#ffffff",
+    padding: "8px 30px 8px 30px",
+    color: "#FFFFFF",
     fontSize: "13px",
     outline: "none",
-    boxSizing: "border-box",
   },
   clearSearchBtn: {
     position: "absolute",
     right: "8px",
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "rgba(255,255,255,0.1)",
+    background: "none",
     border: "none",
-    borderRadius: "50%",
-    width: "18px",
-    height: "18px",
-    color: "#ffffff",
+    color: "#A79FC2",
     cursor: "pointer",
-    fontSize: "10px",
+    fontSize: "12px",
+  },
+  topUpHeaderBtn: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    gap: "5px",
+    backgroundColor: "rgba(61, 220, 151, 0.12)",
+    border: "1px solid rgba(61, 220, 151, 0.3)",
+    color: "#3DDC97",
+    padding: "6px 10px",
+    borderRadius: "10px",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
   burgerButton: {
-    background: "rgba(255,255,255,0.06)",
+    width: "34px",
+    height: "34px",
+    borderRadius: "10px",
+    backgroundColor: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "12px",
-    cursor: "pointer",
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
-    alignItems: "flex-start",
-    gap: "5px",
-    padding: "10px 12px",
-  },
-  burgerLine: {
-    width: "20px",
-    height: "2px",
-    backgroundColor: "#ffffff",
-    borderRadius: "2px",
-  },
-
-  // ПОИСК — РЕЗУЛЬТАТЫ
-  resultsSection: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "20px",
-    padding: "16px",
-    marginBottom: "16px",
-  },
-  resultsHeader: {
-    fontSize: "11px",
-    textTransform: "uppercase",
-    letterSpacing: "0.6px",
-    fontWeight: 700,
-    color: "#8B84A6",
-    marginBottom: "12px",
-  },
-  resultCard: {
-    display: "flex",
     alignItems: "center",
-    gap: "12px",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: "14px",
-    padding: "10px 12px",
+    gap: "4px",
     cursor: "pointer",
   },
-  resultIconBadge: {
-    width: "38px",
-    height: "38px",
-    borderRadius: "12px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#120B1F",
-    flexShrink: 0,
+  burgerLine: {
+    width: "18px",
+    height: "2px",
+    backgroundColor: "#FFFFFF",
+    borderRadius: "2px",
   },
-  resultBody: { display: "flex", flexDirection: "column", flexGrow: 1, minWidth: 0 },
-  resultGroup: { fontSize: "10px", fontWeight: 700, color: "#B98BFF", textTransform: "uppercase", letterSpacing: "0.4px" },
-  resultTitle: { fontSize: "14px", fontWeight: 700, color: "#ffffff" },
-  resultDesc: { fontSize: "11.5px", color: "#A79FC2" },
-  noResults: { fontSize: "13px", color: "#A79FC2", textAlign: "center", padding: "12px 0" },
-
-  // HERO
   hero: {
-    background: "linear-gradient(160deg, rgba(255,95,126,0.16), rgba(110,107,255,0.12))",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "22px",
-    padding: "22px 18px",
-    marginBottom: "16px",
+    padding: "16px 0",
+    marginBottom: "8px",
   },
   heroBadge: {
     display: "inline-flex",
     alignItems: "center",
     gap: "6px",
     fontSize: "11px",
-    fontWeight: 700,
-    color: "#FFD166",
-    background: "rgba(255,209,102,0.14)",
-    padding: "5px 10px",
+    fontWeight: 600,
+    color: "#B98BFF",
+    backgroundColor: "rgba(185, 139, 255, 0.12)",
+    padding: "4px 10px",
     borderRadius: "20px",
-    marginBottom: "12px",
+    marginBottom: "8px",
   },
   heroTitle: {
     fontSize: "24px",
-    fontWeight: 600,
-    color: "#ffffff",
-    margin: "0 0 8px 0",
-    letterSpacing: "-0.3px",
+    margin: "0 0 6px 0",
+    fontWeight: 700,
   },
   heroSub: {
     fontSize: "13px",
-    color: "#C9C2E0",
-    lineHeight: 1.5,
+    color: "#A79FC2",
     margin: 0,
+    lineHeight: 1.4,
   },
-
-  // SECTIONS
   sectionBlock: {
-    display: "flex",
-    flexDirection: "column",
-    backgroundColor: "rgba(255,255,255,0.035)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "20px",
-    padding: "16px",
-    marginBottom: "16px",
+    marginBottom: "18px",
   },
-  sectionHeader: { marginBottom: "14px" },
+  sectionHeader: {
+    marginBottom: "10px",
+  },
   sectionLabel: {
-    fontSize: "11.5px",
-    fontWeight: 800,
-    letterSpacing: "0.3px",
-    padding: "6px 12px",
-    borderRadius: "20px",
+    fontSize: "12px",
+    fontWeight: 700,
+    padding: "4px 10px",
+    borderRadius: "8px",
   },
-
-  // TILE GRID (игры / вакансии)
   tileGrid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: "10px",
+  },
+  tile: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+    borderRadius: "16px",
+    padding: "14px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  tileIconBadge: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    marginBottom: "10px",
+  },
+  tileTitle: {
+    fontSize: "14px",
+    fontWeight: 700,
+    color: "#FFFFFF",
+  },
+  tileSub: {
+    fontSize: "11px",
+    color: "#A79FC2",
+    marginTop: "2px",
+  },
+  rowList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  row: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+    borderRadius: "14px",
+    padding: "10px 12px",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  rowIconBadge: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    flexShrink: 0,
+  },
+  rowBody: {
+    flex: 1,
+  },
+  rowTitle: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#FFFFFF",
+    display: "block",
+  },
+  rowSub: {
+    fontSize: "11px",
+    color: "#A79FC2",
+  },
+  arrowRight: {
+    fontSize: "14px",
+    color: "#7E7694",
   },
   vacancyGrid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: "10px",
   },
-  tile: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "16px",
-    padding: "14px",
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  tileIconBadge: {
-    width: "38px",
-    height: "38px",
-    borderRadius: "12px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#ffffff",
-    marginBottom: "12px",
-  },
-  tileTitle: { fontSize: "13.5px", fontWeight: 700, color: "#ffffff" },
-  tileSub: { fontSize: "11px", color: "#A79FC2", marginTop: "2px" },
-
-  // ROW LIST (обучение)
-  rowList: { display: "flex", flexDirection: "column", gap: "8px" },
-  row: {
-    display: "flex",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "14px",
-    padding: "12px 14px",
-    cursor: "pointer",
-    textAlign: "left",
-    width: "100%",
-  },
-  rowIconBadge: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "11px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#ffffff",
-    marginRight: "12px",
-    flexShrink: 0,
-  },
-  rowBody: { display: "flex", flexDirection: "column", flexGrow: 1 },
-  rowTitle: { fontSize: "13.5px", fontWeight: 700, color: "#ffffff" },
-  rowSub: { fontSize: "11px", color: "#A79FC2", marginTop: "2px" },
-  arrowRight: { fontSize: "15px", color: "#A79FC2", marginLeft: "8px" },
-
-  // PROMO
   promoCard: {
-    background: "linear-gradient(135deg, rgba(255,209,102,0.14), rgba(255,95,126,0.12))",
-    border: "1px dashed rgba(255,209,102,0.4)",
-    borderRadius: "18px",
-    padding: "18px 16px",
+    background: "linear-gradient(135deg, rgba(185,139,255,0.12), rgba(110,107,255,0.06))",
+    border: "1px solid rgba(185, 139, 255, 0.25)",
+    borderRadius: "16px",
+    padding: "16px",
     cursor: "pointer",
-    textAlign: "left",
   },
   promoBadge: {
-    display: "inline-flex",
+    fontSize: "11px",
+    color: "#FFD166",
+    fontWeight: 700,
+    display: "flex",
     alignItems: "center",
-    gap: "5px",
-    fontSize: "10px",
-    fontWeight: 800,
-    color: "#120B1F",
-    backgroundColor: "#FFD166",
-    padding: "4px 9px",
-    borderRadius: "20px",
-    marginBottom: "10px",
-    letterSpacing: "0.3px",
+    gap: "4px",
+    marginBottom: "6px",
   },
-  promoTitle: { fontSize: "15px", fontWeight: 700, color: "#ffffff" },
-  promoDesc: { fontSize: "12px", color: "#C9C2E0", marginTop: "4px", lineHeight: 1.4 },
-  promoLinkBtn: { display: "inline-block", fontSize: "12.5px", fontWeight: 700, color: "#FFD166", marginTop: "12px" },
-
-  // МОДАЛКИ / ШТОРКИ
+  promoTitle: {
+    fontSize: "15px",
+    fontWeight: 700,
+    color: "#FFF",
+    marginBottom: "4px",
+  },
+  promoDesc: {
+    fontSize: "12px",
+    color: "#A79FC2",
+    lineHeight: 1.4,
+    marginBottom: "10px",
+  },
+  promoLinkBtn: {
+    fontSize: "12px",
+    fontWeight: 700,
+    color: "#B98BFF",
+  },
   backdrop: {
     position: "fixed",
-    inset: 0,
-    backgroundColor: "rgba(8, 4, 16, 0.72)",
-    backdropFilter: "blur(6px)",
-    zIndex: 1000,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    backdropFilter: "blur(4px)",
+    zIndex: 999,
   },
   bottomSheet: {
     position: "fixed",
-    bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#1C1330",
-    borderTopLeftRadius: "26px",
-    borderTopRightRadius: "26px",
-    borderTop: "1px solid rgba(255,255,255,0.08)",
-    padding: "14px 20px 30px 20px",
-    zIndex: 1001,
-    maxHeight: "82vh",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 -20px 50px -10px rgba(0,0,0,0.55)",
+    bottom: 0,
+    backgroundColor: "#1A102F",
+    borderTopLeftRadius: "24px",
+    borderTopRightRadius: "24px",
+    borderTop: "1px solid rgba(255,255,255,0.12)",
+    padding: "12px 20px 28px 20px",
+    zIndex: 1000,
+    maxWidth: "500px",
+    margin: "0 auto",
   },
   sheetIndicator: {
-    width: "40px",
+    width: "36px",
     height: "4px",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: "3px",
-    alignSelf: "center",
-    marginBottom: "14px",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: "2px",
+    margin: "0 auto 12px auto",
   },
   modalHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingBottom: "12px",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    marginBottom: "16px",
   },
-  modalLogo: { fontSize: "17px", fontWeight: 700, color: "#ffffff" },
+  modalLogo: {
+    fontSize: "17px",
+    fontWeight: 700,
+    color: "#FFF",
+  },
   closeModalBtn: {
     background: "rgba(255,255,255,0.08)",
     border: "none",
-    borderRadius: "50%",
+    color: "#A79FC2",
     width: "28px",
     height: "28px",
-    color: "#ffffff",
-    fontSize: "13px",
+    borderRadius: "50%",
     cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sheetBody: {
     display: "flex",
     flexDirection: "column",
-    paddingTop: "16px",
-    gap: "14px",
-    overflowY: "auto",
   },
   subLabel: {
-    fontSize: "11.5px",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
+    fontSize: "12px",
     color: "#A79FC2",
-    fontWeight: 700,
-    margin: 0,
+    margin: "0 0 10px 0",
   },
   packGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, 1fr)",
-    gap: "10px",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
   },
   packCard: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: "14px",
-    padding: "18px 12px",
-    cursor: "pointer",
-    textAlign: "center",
-  },
-  packName: { fontSize: "13.5px", fontWeight: 700, color: "#ffffff", marginBottom: "4px" },
-  packPrice: { fontSize: "12px", fontWeight: 700 },
-  orderSummary: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    padding: "14px",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: "12px",
+    padding: "12px",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  packName: {
     fontSize: "13px",
-    color: "#C9C2E0",
+    fontWeight: 700,
+    color: "#FFF",
+  },
+  packPrice: {
+    fontSize: "12px",
+    color: "#3DDC97",
+    fontWeight: 600,
+    marginTop: "4px",
+  },
+  inputLabel: {
+    fontSize: "12px",
+    color: "#A79FC2",
+    marginBottom: "6px",
+    display: "block",
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "13px",
-    padding: "14px",
-    color: "#ffffff",
-    fontSize: "14px",
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "12px",
+    padding: "10px 12px",
+    color: "#FFF",
+    fontSize: "13px",
     outline: "none",
     boxSizing: "border-box",
-    fontFamily: "inherit",
   },
-  btnRow: { display: "flex", gap: "10px" },
-  btnBack: {
+  quickAmountRow: {
+    display: "flex",
+    gap: "6px",
+    marginTop: "8px",
+  },
+  quickAmountBtn: {
     flex: 1,
     backgroundColor: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.1)",
-    color: "#C9C2E0",
+    borderRadius: "8px",
+    color: "#B98BFF",
+    fontSize: "11px",
+    fontWeight: 600,
+    padding: "6px 0",
+    cursor: "pointer",
+  },
+  fileUploadBox: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px dashed rgba(185, 139, 255, 0.4)",
+    borderRadius: "12px",
     padding: "14px",
-    borderRadius: "13px",
-    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    cursor: "pointer",
+    color: "#B98BFF",
+  },
+  paymentCard: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "14px",
+    padding: "14px",
+  },
+  paymentText: {
+    fontSize: "13px",
+    color: "#E0D7F5",
+    margin: "0 0 10px 0",
+  },
+  cardBox: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    padding: "10px 12px",
+    borderRadius: "10px",
+    marginBottom: "6px",
+  },
+  cardNumber: {
+    fontSize: "15px",
     fontWeight: 700,
+    letterSpacing: "1px",
+    color: "#FFF",
+  },
+  copyBtn: {
+    backgroundColor: "rgba(185, 139, 255, 0.15)",
+    border: "none",
+    color: "#B98BFF",
+    fontSize: "11px",
+    fontWeight: 700,
+    padding: "5px 10px",
+    borderRadius: "6px",
+    cursor: "pointer",
+  },
+  cardHolder: {
+    fontSize: "11px",
+    color: "#A79FC2",
+  },
+  btnRow: {
+    display: "flex",
+    gap: "8px",
+    marginTop: "14px",
+  },
+  btnBack: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    border: "none",
+    color: "#FFF",
+    borderRadius: "10px",
+    padding: "10px",
+    fontSize: "13px",
+    fontWeight: 600,
     cursor: "pointer",
   },
   btnPrimary: {
     flex: 1,
     border: "none",
-    color: "#120B1F",
-    padding: "14px",
-    borderRadius: "13px",
-    fontSize: "14px",
-    fontWeight: 800,
+    color: "#FFF",
+    borderRadius: "10px",
+    padding: "10px",
+    fontSize: "13px",
+    fontWeight: 700,
     cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(185,139,255,0.3)",
   },
-  paymentCard: {
+  orderSummary: {
+    fontSize: "13px",
+    color: "#A79FC2",
+    marginBottom: "12px",
+  },
+  successBox: {
+    textAlign: "center",
+    padding: "20px 10px",
+  },
+  successTitle: {
+    fontSize: "18px",
+    fontWeight: 700,
+    color: "#FFF",
+    marginBottom: "6px",
+  },
+  successSub: {
+    fontSize: "13px",
+    color: "#A79FC2",
+    lineHeight: 1.4,
+  },
+  eduInfoCard: {
     backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "18px",
-    padding: "16px",
-  },
-  paymentText: { fontSize: "13px", color: "#C9C2E0", margin: "0 0 14px 0" },
-  cardBox: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.25)",
     padding: "14px",
     borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.06)",
-    marginBottom: "10px",
   },
-  cardNumber: { fontSize: "15px", fontWeight: 700, fontFamily: "monospace", color: "#ffffff" },
-  copyBtn: {
-    backgroundColor: "#ffffff",
-    border: "none",
-    color: "#120B1F",
-    fontSize: "11px",
-    fontWeight: 800,
-    padding: "7px 12px",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  cardHolder: { fontSize: "10px", color: "#8B84A6", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "14px" },
-  warningText: { fontSize: "11.5px", color: "#FF9DAF", margin: 0, lineHeight: 1.4 },
-
-  // УСПЕХ
-  successWrap: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    textAlign: "center",
-    padding: "28px 10px 16px 10px",
-  },
-  successIconWrap: {
-    width: "82px",
-    height: "82px",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#ffffff",
-    marginBottom: "18px",
-    animation: "bt-circlePop .5s cubic-bezier(.34,1.56,.64,1)",
-  },
-  successTitle: { fontSize: "20px", fontWeight: 600, color: "#ffffff", marginBottom: "6px" },
-  successSub: { fontSize: "13px", color: "#C9C2E0", lineHeight: 1.5, maxWidth: "260px" },
-
-  eduText: { fontSize: "14px", color: "#C9C2E0", lineHeight: 1.55, margin: 0 },
-
-  // ТАБЫ / ВАКАНСИИ
   tabRow: {
     display: "flex",
     gap: "6px",
-    margin: "12px 0 16px 0",
-    backgroundColor: "rgba(0,0,0,0.2)",
-    padding: "4px",
-    borderRadius: "12px",
+    marginBottom: "10px",
   },
-  tab: {
+  tabBtn: {
     flex: 1,
-    backgroundColor: "transparent",
-    border: "none",
-    borderRadius: "9px",
-    color: "#A79FC2",
-    padding: "9px",
-    fontSize: "12.5px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  tabActive: { backgroundColor: "rgba(255,255,255,0.12)", color: "#ffffff" },
-  vacList: { flexGrow: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" },
-  vacCard: {
     backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "14px",
-    padding: "14px",
-  },
-  vacRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "6px" },
-  vacTitle: { fontSize: "14px", fontWeight: 700, color: "#ffffff" },
-  vacBudget: { fontSize: "12px", color: "#3DDC97", fontWeight: 700, whiteSpace: "nowrap" },
-  vacDesc: { fontSize: "12px", color: "#A79FC2", margin: "0 0 12px 0", lineHeight: 1.45 },
-  vacApplyBtn: {
-    backgroundColor: "rgba(255,255,255,0.08)",
     border: "1px solid rgba(255,255,255,0.08)",
-    color: "#ffffff",
+    color: "#A79FC2",
+    padding: "8px",
     borderRadius: "10px",
-    padding: "9px 12px",
     fontSize: "12px",
-    fontWeight: 700,
+    fontWeight: 600,
     cursor: "pointer",
-    width: "100%",
   },
-
-  // МЕНЮ
+  tabBtnActive: {
+    backgroundColor: "rgba(185, 139, 255, 0.2)",
+    borderColor: "#B98BFF",
+    color: "#FFF",
+  },
+  vacCard: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "12px",
+    padding: "10px 12px",
+  },
+  vacTitle: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#FFF",
+  },
+  vacBudget: {
+    fontSize: "11px",
+    color: "#3DDC97",
+    fontWeight: 700,
+  },
+  vacDesc: {
+    fontSize: "11px",
+    color: "#A79FC2",
+    margin: "4px 0 8px 0",
+  },
+  vacApplyBtn: {
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    border: "none",
+    color: "#FFF",
+    padding: "6px",
+    borderRadius: "8px",
+    fontSize: "11px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   drawer: {
     position: "fixed",
     top: 0,
     right: 0,
     bottom: 0,
     width: "270px",
-    backgroundColor: "#1C1330",
-    borderLeft: "1px solid rgba(255,255,255,0.08)",
-    padding: "26px 20px",
+    backgroundColor: "#1A102F",
+    borderLeft: "1px solid rgba(255,255,255,0.1)",
+    padding: "20px",
     zIndex: 1001,
     display: "flex",
     flexDirection: "column",
   },
-  drawerHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px" },
-  drawerTitle: { fontSize: "19px", fontWeight: 600, color: "#ffffff" },
-  drawerNav: { display: "flex", flexDirection: "column", gap: "10px" },
-  navItem: {
+  drawerHeader: {
     display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: "12px",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "13px",
-    color: "#ffffff",
-    padding: "13px 14px",
-    textAlign: "left",
-    fontSize: "13.5px",
+    marginBottom: "20px",
+  },
+  drawerTitle: {
+    fontSize: "18px",
     fontWeight: 700,
+    color: "#FFF",
+  },
+  drawerBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  menuBalanceCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "14px",
+    padding: "14px",
+  },
+  menuList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  menuItem: {
+    backgroundColor: "transparent",
+    border: "none",
+    color: "#E0D7F5",
+    fontSize: "13px",
+    textAlign: "left",
+    padding: "8px 0",
     cursor: "pointer",
   },
-  navIconBadge: {
-    width: "30px",
-    height: "30px",
-    borderRadius: "9px",
+  resultsSection: {
+    marginTop: "8px",
+  },
+  resultsHeader: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#A79FC2",
+    marginBottom: "8px",
+  },
+  resultCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "12px",
+    padding: "10px",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    cursor: "pointer",
+  },
+  resultIconBadge: {
+    width: "32px",
+    height: "32px",
+    borderRadius: "8px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "14px",
+    color: "#FFF",
+  },
+  resultBody: {
+    flex: 1,
+  },
+  resultGroup: {
+    fontSize: "10px",
+    color: "#B98BFF",
+    fontWeight: 700,
+  },
+  resultTitle: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#FFF",
+  },
+  resultDesc: {
+    fontSize: "11px",
+    color: "#A79FC2",
+  },
+  noResults: {
+    textAlign: "center",
+    color: "#A79FC2",
+    fontSize: "13px",
+    padding: "20px",
   },
 };
