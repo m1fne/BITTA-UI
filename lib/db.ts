@@ -1,0 +1,77 @@
+import { createClient } from "@supabase/supabase-js";
+
+// Service Role Key — только на сервере, обходит RLS. Никогда не должен
+// попадать во фронтенд (и тем более в переменную с префиксом NEXT_PUBLIC_).
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: { persistSession: false },
+});
+
+export interface User {
+  telegram_id: number;
+  username: string | null;
+  balance: number;
+  created_at: string;
+}
+
+export interface Deposit {
+  id: string;
+  user_id: number;
+  amount: number;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
+
+export async function getOrCreateUser(telegramId: number, username?: string | null): Promise<User> {
+  const { data: existing, error: findErr } = await supabase
+    .from("users")
+    .select("*")
+    .eq("telegram_id", telegramId)
+    .maybeSingle();
+
+  if (findErr) throw findErr;
+  if (existing) return existing as User;
+
+  const { data: created, error: insErr } = await supabase
+    .from("users")
+    .insert({ telegram_id: telegramId, username: username ?? null })
+    .select()
+    .single();
+
+  if (insErr) throw insErr;
+  return created as User;
+}
+
+export async function getBalance(telegramId: number): Promise<number> {
+  const { data, error } = await supabase.from("users").select("balance").eq("telegram_id", telegramId).single();
+  if (error) throw error;
+  return Number(data.balance);
+}
+
+export async function createDeposit(userId: number, amount: number): Promise<Deposit> {
+  const { data, error } = await supabase
+    .from("deposits")
+    .insert({ user_id: userId, amount, status: "pending" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Deposit;
+}
+
+export async function getDeposit(id: string): Promise<Deposit | null> {
+  const { data, error } = await supabase.from("deposits").select("*").eq("id", id).single();
+  if (error) return null;
+  return data as Deposit;
+}
+
+export async function approveDeposit(depositId: string): Promise<void> {
+  const { error } = await supabase.rpc("approve_deposit", { p_deposit_id: depositId });
+  if (error) throw error;
+}
+
+export async function rejectDeposit(depositId: string): Promise<void> {
+  const { error } = await supabase.rpc("reject_deposit", { p_deposit_id: depositId });
+  if (error) throw error;
+}
