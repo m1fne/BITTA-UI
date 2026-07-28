@@ -39,11 +39,10 @@ const adPartners = [
 
 const shopProducts: Record<
   ShopType,
-  { title: string; emoji: string; placeholder: string; packs: { name: string; price: string }[] }
+  { title: string; placeholder: string; packs: { name: string; price: string }[] }
 > = {
   pubg: {
     title: "PUBG Mobile UC",
-    emoji: "🔫",
     placeholder: "Player ID (masalan: 5123456789)",
     packs: [
       { name: "60 UC", price: "12,000 UZS" },
@@ -54,7 +53,6 @@ const shopProducts: Record<
   },
   freefire: {
     title: "Free Fire Almazlar",
-    emoji: "💎",
     placeholder: "Player ID (masalan: 78291044)",
     packs: [
       { name: "100 + 10 Almaz", price: "15,000 UZS" },
@@ -65,7 +63,6 @@ const shopProducts: Record<
   },
   steam: {
     title: "Steam Balans",
-    emoji: "🕹️",
     placeholder: "Steam Login (masalan: musa_pro)",
     packs: [
       { name: "$5 USD", price: "70,000 UZS" },
@@ -75,7 +72,6 @@ const shopProducts: Record<
   },
   premium: {
     title: "Telegram Premium",
-    emoji: "⭐",
     placeholder: "Telegram Username (masalan: @username)",
     packs: [
       { name: "3 Oy (Muddatsiz)", price: "90,000 UZS" },
@@ -146,6 +142,13 @@ const Icons = {
       <path d="M15 27l7 7 15-16" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="bt-check-path" />
     </svg>
   ),
+  XCircle: () => (
+    <svg width="56" height="56" viewBox="0 0 52 52" fill="none">
+      <circle cx="26" cy="26" r="24" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+      <line x1="18" y1="18" x2="34" y2="34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+      <line x1="34" y1="18" x2="18" y2="34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  ),
   Wallet: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="4" width="20" height="16" rx="3" />
@@ -158,6 +161,54 @@ const Icons = {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  ),
+  Close: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  ),
+  CheckSmall: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ),
+  Clock: () => (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  ),
+  ChevronRight: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  ),
+  Rocket: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+    </svg>
+  ),
+  Headphones: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+    </svg>
+  ),
+  Megaphone: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 11l18-5v12L3 13v-2z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </svg>
+  ),
+  FileText: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
     </svg>
   ),
 };
@@ -177,6 +228,19 @@ const shopTheme: Record<ShopType, typeof themes.pink> = {
   freefire: themes.gold,
   steam: themes.blue,
   premium: themes.violet,
+};
+
+// Иконки для заголовков модалок (вместо emoji)
+const shopIcons: Record<ShopType, () => JSX.Element> = {
+  pubg: Icons.Gamepad,
+  freefire: Icons.Diamond,
+  steam: Icons.Steam,
+  premium: Icons.Premium,
+};
+
+const eduIcons: Record<EduType, () => JSX.Element> = {
+  cefr: Icons.Book,
+  prava: Icons.Pravaga,
 };
 
 // ===================== КОМПОНЕНТ =====================
@@ -538,14 +602,14 @@ export default function Home() {
             <div style={styles.searchIcon}><Icons.Search /></div>
             <input
               type="text"
-              placeholder="Nima kerak? 🔍"
+              placeholder="Nima kerak?"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={styles.searchInput}
               className="bt-search-input"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn">✕</button>
+              <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn"><Icons.Close /></button>
             )}
           </div>
 
@@ -577,12 +641,12 @@ export default function Home() {
                       <div style={styles.resultTitle}>{item.title}</div>
                       <div style={styles.resultDesc}>{item.desc}</div>
                     </div>
-                    <span style={styles.arrowRight}>→</span>
+                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring 🤔</div>
+              <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring</div>
             )}
           </div>
         ) : (
@@ -591,13 +655,13 @@ export default function Home() {
             <section style={styles.hero}>
               <div style={styles.heroBadge}><Icons.Sparkle /> Bitta ilovada — hammasi</div>
               <h1 className="bt-display" style={styles.heroTitle}>Nimadan boshlaymiz?</h1>
-              <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda 🎉</p>
+              <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda</p>
             </section>
 
             {/* ДOНАT */}
             <section style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
-                <span style={{ ...styles.sectionLabel, background: "rgba(255,95,126,.14)", color: "#FF9DAF" }}>🎮 O'yin & Donat</span>
+                <span style={{ ...styles.sectionLabel, background: "rgba(255,95,126,.14)", color: "#FF9DAF" }}><Icons.Gamepad /> O'yin & Donat</span>
               </div>
               <div style={styles.tileGrid}>
                 <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
@@ -637,7 +701,7 @@ export default function Home() {
             {/* ОБУЧЕНИЕ */}
             <section style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
-                <span style={{ ...styles.sectionLabel, background: "rgba(55,229,196,.14)", color: "#7FF0D9" }}>📚 Ta'lim & Imtihon</span>
+                <span style={{ ...styles.sectionLabel, background: "rgba(55,229,196,.14)", color: "#7FF0D9" }}><Icons.Book /> Ta'lim & Imtihon</span>
               </div>
               <div style={styles.rowList}>
                 <button style={styles.row} className="bt-row" onClick={() => openLinkInside("https://ielts.gg")}>
@@ -648,7 +712,7 @@ export default function Home() {
                     <span style={styles.rowTitle}>IELTS.GG</span>
                     <span style={styles.rowSub}>Professional IELTS imtihoniga tayyorgarlik</span>
                   </div>
-                  <span style={styles.arrowRight}>→</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
 
                 <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("cefr")}>
@@ -659,7 +723,7 @@ export default function Home() {
                     <span style={styles.rowTitle}>CEFR Imtihonlari</span>
                     <span style={styles.rowSub}>Milliy sertifikat imtihon materiallari</span>
                   </div>
-                  <span style={styles.arrowRight}>→</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
 
                 <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("prava")}>
@@ -670,7 +734,7 @@ export default function Home() {
                     <span style={styles.rowTitle}>Pravaga Tayyorgarlik</span>
                     <span style={styles.rowSub}>Avtomobil imtihoni (GAI) testlari</span>
                   </div>
-                  <span style={styles.arrowRight}>→</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
               </div>
             </section>
@@ -678,7 +742,7 @@ export default function Home() {
             {/* ВАКАНСИИ */}
             <section style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
-                <span style={{ ...styles.sectionLabel, background: "rgba(185,139,255,.14)", color: "#D5BCFF" }}>💼 Ishga Vakansiya</span>
+                <span style={{ ...styles.sectionLabel, background: "rgba(185,139,255,.14)", color: "#D5BCFF" }}><Icons.Briefcase /> Ishga Vakansiya</span>
               </div>
               <div style={styles.vacancyGrid}>
                 <button style={styles.tile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); }}>
@@ -705,7 +769,7 @@ export default function Home() {
                 <div style={styles.promoBadge}><Icons.Sparkle /> Reklama xizmati</div>
                 <div style={styles.promoTitle}>Bitta-da o'z brendingizni e'lon qiling!</div>
                 <div style={styles.promoDesc}>Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.</div>
-                <span style={styles.promoLinkBtn}>Murojaat qilish (@bitta_mngr) →</span>
+                <span style={styles.promoLinkBtn}>Murojaat qilish (@bitta_mngr) <Icons.ChevronRight /></span>
               </div>
             </section>
           </>
@@ -719,9 +783,9 @@ export default function Home() {
           <div style={styles.bottomSheet} className="bt-sheet">
             <div style={styles.sheetIndicator}></div>
             <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>💳 Balans to'ldirish</div>
+              <div style={styles.modalLogo}><Icons.Wallet /> Balans to'ldirish</div>
               {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected") && (
-                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsTopUpOpen(false)}>✕</button>
+                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsTopUpOpen(false)}><Icons.Close /></button>
               )}
             </div>
 
@@ -744,7 +808,7 @@ export default function Home() {
                         setTimeout(() => setTopUpCopied(false), 1500);
                       }}
                     >
-                      {topUpCopied ? "Nusxalandi! ✅" : "Nusxa olish"}
+                      {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
                     </button>
                   </div>
                   <div style={styles.cardHolder}>Karta egasi: MUSA A.</div>
@@ -784,8 +848,8 @@ export default function Home() {
                   <label style={styles.inputLabel}>To'lov chekini yuklang (rasm):</label>
                   <label style={styles.fileUploadBox} className="bt-tile">
                     <Icons.Upload />
-                    <span style={{ fontSize: "13px", fontWeight: 600 }}>
-                      {topUpReceiptName ? `📄 ${topUpReceiptName}` : "Chek rasmini tanlang"}
+                    <span style={{ fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      {topUpReceiptName ? <><Icons.FileText /> {topUpReceiptName}</> : "Chek rasmini tanlang"}
                     </span>
                     <input
                       type="file"
@@ -807,12 +871,14 @@ export default function Home() {
                   onClick={handleFinishTopUp}
                   disabled={topUpStatus === "submitting"}
                 >
-                  {topUpStatus === "submitting" ? "Yuborilmoqda..." : "To'lovni tasdiqlash 🚀"}
+                  {topUpStatus === "submitting" ? "Yuborilmoqda..." : <><Icons.Rocket /> To'lovni tasdiqlash</>}
                 </button>
               </div>
             ) : topUpStatus === "pending" ? (
               <div style={styles.successBox}>
-                <div style={{ color: "#FFD166", marginBottom: "12px", fontSize: "40px" }}>⏳</div>
+                <div style={{ color: "#FFD166", marginBottom: "12px" }}>
+                  <Icons.Clock />
+                </div>
                 <div style={styles.successTitle}>Tekshirilmoqda...</div>
                 <div style={styles.successSub}>
                   To'lov so'rovingiz adminga yuborildi. Tasdiqlangach bu oyna avtomatik yangilanadi — hech narsa qilish shart emas.
@@ -823,14 +889,16 @@ export default function Home() {
                 <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
                   <Icons.Check />
                 </div>
-                <div style={styles.successTitle}>Balans to'ldirildi! ✅</div>
+                <div style={styles.successTitle}>Balans to'ldirildi!</div>
                 <div style={styles.successSub}>
                   Joriy balansingiz: <strong style={{ color: "#3DDC97" }}>{userBalance.toLocaleString("uz-UZ")} UZS</strong>
                 </div>
               </div>
             ) : (
               <div style={styles.successBox}>
-                <div style={{ color: "#FF9DAF", marginBottom: "12px", fontSize: "40px" }}>❌</div>
+                <div style={{ color: "#FF9DAF", marginBottom: "12px" }}>
+                  <Icons.XCircle />
+                </div>
                 <div style={styles.successTitle}>So'rov rad etildi</div>
                 <div style={styles.successSub}>
                   To'lov tasdiqlanmadi. Agar bu xato bo'lsa, @bitta_mngr ga yozing yoki qaytadan urinib ko'ring.
@@ -855,9 +923,11 @@ export default function Home() {
           <div style={styles.bottomSheet} className="bt-sheet">
             <div style={styles.sheetIndicator}></div>
             <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>{shopProducts[activeShopType].emoji} {shopProducts[activeShopType].title}</div>
+              <div style={styles.modalLogo}>
+                {(() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()} {shopProducts[activeShopType].title}
+              </div>
               {shopStep !== 4 && (
-                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}>✕</button>
+                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}><Icons.Close /></button>
               )}
             </div>
 
@@ -909,7 +979,7 @@ export default function Home() {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
                     }}>
-                      {copied ? "Nusxalandi! ✅" : "Nusxa olish"}
+                      {copied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
                     </button>
                   </div>
                   <div style={styles.cardHolder}>Karta egasi: MUSA A.</div>
@@ -942,9 +1012,9 @@ export default function Home() {
             <div style={styles.sheetIndicator}></div>
             <div style={styles.modalHeader}>
               <div style={styles.modalLogo}>
-                {eduType === "cefr" ? "📚 CEFR Imtihonlari" : "🚗 Pravaga Tayyorgarlik"}
+                {eduType === "cefr" ? <Icons.Book /> : <Icons.Pravaga />} {eduType === "cefr" ? "CEFR Imtihonlari" : "Pravaga Tayyorgarlik"}
               </div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsEduOpen(false)}>✕</button>
+              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsEduOpen(false)}><Icons.Close /></button>
             </div>
             <div style={styles.sheetBody}>
               <div style={styles.eduInfoCard}>
@@ -962,7 +1032,7 @@ export default function Home() {
                   openTelegramLink(eduType === "cefr" ? "https://t.me/bitta_cefr_bot" : "https://t.me/bitta_prava_bot");
                 }}
               >
-                Botda Mashq Qilish 🚀
+                <Icons.Rocket /> Botda Mashq Qilish
               </button>
             </div>
           </div>
@@ -976,8 +1046,8 @@ export default function Home() {
           <div style={styles.bottomSheet} className="bt-sheet">
             <div style={styles.sheetIndicator}></div>
             <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>💼 Vakansiyalar va Ishlar</div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsVacancyOpen(false)}>✕</button>
+              <div style={styles.modalLogo}><Icons.Briefcase /> Vakansiyalar va Ishlar</div>
+              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsVacancyOpen(false)}><Icons.Close /></button>
             </div>
 
             <div style={styles.sheetBody}>
@@ -1099,7 +1169,7 @@ export default function Home() {
           <div style={styles.drawer}>
             <div style={styles.drawerHeader}>
               <div style={styles.drawerTitle}>Menyu</div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsMenuOpen(false)}>✕</button>
+              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsMenuOpen(false)}><Icons.Close /></button>
             </div>
 
             <div style={styles.drawerBody}>
@@ -1117,16 +1187,16 @@ export default function Home() {
                     handleOpenTopUp();
                   }}
                 >
-                  💳 Balansni to'ldirish
+                  <Icons.Wallet /> Balansni to'ldirish
                 </button>
               </div>
 
               <div style={styles.menuList}>
                 <button style={styles.menuItem} onClick={() => { setIsMenuOpen(false); openTelegramLink("https://t.me/bitta_mngr"); }}>
-                  🎧 Qo'llab-quvvatlash (@bitta_mngr)
+                  <Icons.Headphones /> Qo'llab-quvvatlash (@bitta_mngr)
                 </button>
                 <button style={styles.menuItem} onClick={() => { setIsMenuOpen(false); openTelegramLink("https://t.me/bitta_official"); }}>
-                  📢 Rasmiy kanal
+                  <Icons.Megaphone /> Rasmiy kanal
                 </button>
               </div>
             </div>
@@ -1229,7 +1299,10 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     color: "#A79FC2",
     cursor: "pointer",
-    fontSize: "12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "4px",
   },
   topUpHeaderBtn: {
     display: "flex",
@@ -1298,6 +1371,9 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "10px",
   },
   sectionLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
     fontSize: "12px",
     fontWeight: 700,
     padding: "4px 10px",
@@ -1379,7 +1455,8 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#A79FC2",
   },
   arrowRight: {
-    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
     color: "#7E7694",
   },
   vacancyGrid: {
@@ -1416,6 +1493,9 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "10px",
   },
   promoLinkBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
     fontSize: "12px",
     fontWeight: 700,
     color: "#B98BFF",
@@ -1458,6 +1538,9 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "16px",
   },
   modalLogo: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
     fontSize: "17px",
     fontWeight: 700,
     color: "#FFF",
@@ -1579,6 +1662,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#FFF",
   },
   copyBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
     backgroundColor: "rgba(185, 139, 255, 0.15)",
     border: "none",
     color: "#B98BFF",
@@ -1610,6 +1696,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   btnPrimary: {
     flex: 1,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
     border: "none",
     color: "#FFF",
     borderRadius: "10px",
@@ -1738,6 +1828,9 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "8px",
   },
   menuItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
     backgroundColor: "transparent",
     border: "none",
     color: "#E0D7F5",
