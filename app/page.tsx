@@ -211,6 +211,20 @@ const Icons = {
       <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
     </svg>
   ),
+  Bot: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="10" width="18" height="10" rx="3" />
+      <circle cx="8.5" cy="15" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="15" r="1.3" fill="currentColor" stroke="none" />
+      <path d="M12 10V6" /><circle cx="12" cy="4.5" r="1.5" />
+      <path d="M3 14H1M23 14h-2" />
+    </svg>
+  ),
+  Send: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  ),
 };
 
 // ===================== ЦВЕТОВЫЕ ТЕМЫ =====================
@@ -249,6 +263,13 @@ export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [userBalance, setUserBalance] = useState(0);
+
+  // BITTA AI (Gemini)
+  const [isAiOpen, setIsAiOpen] = useState(false);
+  const [aiMessages, setAiMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [aiInput, setAiInput] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   // ПОПОЛНЕНИЕ БАЛАНСА
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
@@ -421,6 +442,42 @@ export default function Home() {
     }
   };
 
+  // BITTA AI — отправка сообщения на бэкенд, который сам ходит в Gemini
+  const handleSendAi = async () => {
+    const text = aiInput.trim();
+    if (!text || isAiLoading) return;
+
+    haptic("light");
+    const nextMessages = [...aiMessages, { role: "user" as const, text }];
+    setAiMessages(nextMessages);
+    setAiInput("");
+    setAiError("");
+    setIsAiLoading(true);
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData: getInitData(),
+          message: text,
+          // на бэкенд шлём только последние сообщения — так меньше токенов уходит на каждый запрос
+          history: nextMessages.slice(-10, -1),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.reply) {
+        setAiError(data.error === "RATE_LIMIT" ? "AI hozir band, birozdan so'ng qayta urinib ko'ring." : "Javob olib bo'lmadi. Qayta urinib ko'ring.");
+        return;
+      }
+      setAiMessages((prev) => [...prev, { role: "assistant", text: data.reply }]);
+    } catch {
+      setAiError("Server bilan bog'lanib bo'lmadi.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   // МАГАЗИН
   const handleOpenShop = (type: ShopType) => {
     haptic("light");
@@ -579,6 +636,25 @@ export default function Home() {
         .bt-search-input:focus { box-shadow: 0 0 0 3px rgba(184,139,255,.28); }
         .bt-sheet { animation: bt-sheetUp .32s cubic-bezier(0, 0, 0.2, 1) forwards; }
         .bt-backdrop { animation: bt-fadeIn .2s ease forwards; }
+
+        @keyframes bt-ai-glow {
+          0%, 100% { box-shadow: 0 6px 20px rgba(185,139,255,.45); }
+          50% { box-shadow: 0 6px 28px rgba(185,139,255,.75); }
+        }
+        .bt-ai-fab { animation: bt-ai-glow 2.4s ease-in-out infinite; transition: transform .15s ease; }
+        .bt-ai-fab:active { transform: scale(0.94); }
+
+        .bt-ai-typing { display: inline-flex; gap: 4px; align-items: center; }
+        .bt-ai-typing span {
+          width: 6px; height: 6px; border-radius: 50%; background: #A79FC2;
+          animation: bt-ai-blink 1.2s infinite ease-in-out both;
+        }
+        .bt-ai-typing span:nth-child(2) { animation-delay: .15s; }
+        .bt-ai-typing span:nth-child(3) { animation-delay: .3s; }
+        @keyframes bt-ai-blink {
+          0%, 80%, 100% { opacity: .3; transform: scale(0.8); }
+          40% { opacity: 1; transform: scale(1); }
+        }
       ` }} />
 
       {/* ФОНОВЫЕ ПЯТНА */}
@@ -1021,7 +1097,7 @@ export default function Home() {
                 <p style={{ margin: "0 0 8px 0", color: "#E0D7F5", fontSize: "14px", lineHeight: 1.5 }}>
                   {eduType === "cefr"
                     ? "CEFR B1, B2, C1 darajadagi testlar, audio materiallar va mock imtihon topshirish bo'limi."
-                    : "Yo'l harakati qoidalari (YHQ), GAI kompyuter imtihoni testlari va bilimlarni sinash boti."}
+                    : "Yo'l harakati qoidalari (YHQ), GAI kompyuter imtihoni testlari va bilimlarni onlayn sinash platformasi."}
                 </p>
               </div>
               <button
@@ -1029,10 +1105,10 @@ export default function Home() {
                 className="bt-primary-btn"
                 onClick={() => {
                   haptic("light");
-                  openTelegramLink(eduType === "cefr" ? "https://t.me/bitta_cefr_bot" : "https://t.me/bitta_prava_bot");
+                  openLinkInside(eduType === "cefr" ? "https://www.efset.org" : "https://pravaapp.uz");
                 }}
               >
-                <Icons.Rocket /> Botda Mashq Qilish
+                <Icons.Rocket /> {eduType === "cefr" ? "EFSET.org saytiga o'tish" : "PravaApp.uz saytiga o'tish"}
               </button>
             </div>
           </div>
@@ -1203,6 +1279,67 @@ export default function Home() {
           </div>
         </>
       )}
+
+      {/* ===================== ПЛАВАЮЩАЯ КНОПКА BITTA AI ===================== */}
+      {!isAiOpen && (
+        <button
+          style={styles.aiFab}
+          className="bt-ai-fab"
+          onClick={() => { haptic("light"); setIsAiOpen(true); }}
+        >
+          <Icons.Bot />
+          <span>BITTA AI</span>
+        </button>
+      )}
+
+      {/* ===================== ЧАТ BITTA AI ===================== */}
+      {isAiOpen && (
+        <>
+          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsAiOpen(false)} />
+          <div style={{ ...styles.bottomSheet, height: "78vh", display: "flex", flexDirection: "column" }} className="bt-sheet">
+            <div style={styles.sheetIndicator}></div>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalLogo}><Icons.Bot /> BITTA AI</div>
+              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsAiOpen(false)}><Icons.Close /></button>
+            </div>
+
+            <div style={styles.aiMessagesList}>
+              {aiMessages.length === 0 && (
+                <div style={styles.aiEmptyState}>
+                  <Icons.Bot />
+                  <p style={{ margin: "10px 0 0 0" }}>Salom! Men BITTA AI — savolingiz bo'lsa, yozing: donatlar, CEFR, prava yoki ish qidirish bo'yicha yordam beraman.</p>
+                </div>
+              )}
+              {aiMessages.map((m, i) => (
+                <div key={i} style={m.role === "user" ? styles.aiBubbleUser : styles.aiBubbleAssistant}>
+                  {m.text}
+                </div>
+              ))}
+              {isAiLoading && (
+                <div style={styles.aiBubbleAssistant}>
+                  <span className="bt-ai-typing"><span></span><span></span><span></span></span>
+                </div>
+              )}
+              {aiError && <div style={{ color: "#FF9DAF", fontSize: "12px", textAlign: "center" }}>{aiError}</div>}
+            </div>
+
+            <div style={styles.aiInputRow}>
+              <input
+                type="text"
+                value={aiInput}
+                onChange={(e) => setAiInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSendAi(); }}
+                placeholder="Savolingizni yozing..."
+                style={styles.aiInput}
+                disabled={isAiLoading}
+              />
+              <button style={styles.aiSendBtn} className="bt-primary-btn" onClick={handleSendAi} disabled={isAiLoading || !aiInput.trim()}>
+                <Icons.Send />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1210,6 +1347,91 @@ export default function Home() {
 // ===================== СТИЛИ (JS OBJECT) =====================
 
 const styles: Record<string, React.CSSProperties> = {
+  aiFab: {
+    position: "fixed",
+    bottom: "20px",
+    right: "16px",
+    zIndex: 500,
+    display: "flex",
+    alignItems: "center",
+    gap: "7px",
+    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
+    color: "#FFF",
+    border: "none",
+    borderRadius: "999px",
+    padding: "12px 18px",
+    fontSize: "13px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  aiMessagesList: {
+    flex: 1,
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    padding: "14px 2px",
+  },
+  aiEmptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+    color: "#A79FC2",
+    fontSize: "13px",
+    lineHeight: 1.5,
+    padding: "30px 14px",
+  },
+  aiBubbleUser: {
+    alignSelf: "flex-end",
+    maxWidth: "82%",
+    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
+    color: "#FFF",
+    borderRadius: "14px 14px 2px 14px",
+    padding: "10px 13px",
+    fontSize: "13.5px",
+    lineHeight: 1.45,
+  },
+  aiBubbleAssistant: {
+    alignSelf: "flex-start",
+    maxWidth: "82%",
+    background: "rgba(255,255,255,0.06)",
+    color: "#E0D7F5",
+    borderRadius: "14px 14px 14px 2px",
+    padding: "10px 13px",
+    fontSize: "13.5px",
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap",
+  },
+  aiInputRow: {
+    display: "flex",
+    gap: "8px",
+    paddingTop: "10px",
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+  },
+  aiInput: {
+    flex: 1,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "12px",
+    padding: "11px 14px",
+    color: "#FFF",
+    fontSize: "13.5px",
+    outline: "none",
+  },
+  aiSendBtn: {
+    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
+    border: "none",
+    borderRadius: "12px",
+    width: "44px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    cursor: "pointer",
+    flex: "0 0 auto",
+    boxShadow: "0 4px 14px rgba(185,139,255,0.3)",
+  },
   container: {
     minHeight: "100vh",
     backgroundColor: "#120A21",
