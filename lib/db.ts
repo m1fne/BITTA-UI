@@ -74,4 +74,62 @@ export async function approveDeposit(depositId: string): Promise<void> {
 export async function rejectDeposit(depositId: string): Promise<void> {
   const { error } = await supabase.rpc("reject_deposit", { p_deposit_id: depositId });
   if (error) throw error;
+}// ===== Добавить в конец существующего lib/db.ts =====
+
+export interface Order {
+  id: string;
+  order_no: number;
+  user_id: number;
+  service: string;
+  product_name: string;
+  target_id: string;
+  price: number;
+  status: "processing" | "completed" | "refunded";
+  created_at: string;
+}
+
+export type PurchaseResult =
+  | { ok: true; order: Order }
+  | { ok: false; error: "INSUFFICIENT_BALANCE" | "USER_NOT_FOUND" | "UNKNOWN" };
+
+// Проверка баланса и списание — одной атомарной транзакцией в БД (purchase_with_balance),
+// поэтому здесь не нужно вручную проверять баланс заранее.
+export async function purchaseWithBalance(
+  userId: number,
+  service: string,
+  productName: string,
+  targetId: string,
+  price: number
+): Promise<PurchaseResult> {
+  const { data, error } = await supabase.rpc("purchase_with_balance", {
+    p_user_id: userId,
+    p_service: service,
+    p_product_name: productName,
+    p_target_id: targetId,
+    p_price: price,
+  });
+
+  if (error) {
+    if (error.message.includes("INSUFFICIENT_BALANCE")) return { ok: false, error: "INSUFFICIENT_BALANCE" };
+    if (error.message.includes("USER_NOT_FOUND")) return { ok: false, error: "USER_NOT_FOUND" };
+    return { ok: false, error: "UNKNOWN" };
+  }
+
+  return { ok: true, order: data as Order };
+}
+
+export async function getOrder(id: string): Promise<Order | null> {
+  const { data, error } = await supabase.from("orders").select("*").eq("id", id).single();
+  if (error) return null;
+  return data as Order;
+}
+
+export async function completeOrder(orderId: string): Promise<void> {
+  const { error } = await supabase.rpc("complete_order", { p_order_id: orderId });
+  if (error) throw error;
+}
+
+export async function refundOrder(orderId: string): Promise<void> {
+  const { error } = await supabase.rpc("refund_order", { p_order_id: orderId });
+  if (error) throw error;
 }

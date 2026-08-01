@@ -271,6 +271,10 @@ export default function Home() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
+  // Покупка в магазине (списание с баланса)
+  const [buyError, setBuyError] = useState("");
+  const [isBuying, setIsBuying] = useState(false);
+
   // ПОПОЛНЕНИЕ БАЛАНСА
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState("");
@@ -288,7 +292,6 @@ export default function Home() {
   const [shopStep, setShopStep] = useState(1); // 1 tanlash, 2 malumot, 3 tolov, 4 tayyor
   const [selectedPack, setSelectedPack] = useState<{ name: string; price: string } | null>(null);
   const [userCredential, setUserCredential] = useState("");
-  const [copied, setCopied] = useState(false);
 
   // БАК 2: Обучение
   const [isEduOpen, setIsEduOpen] = useState(false);
@@ -485,42 +488,62 @@ export default function Home() {
     setShopStep(1);
     setSelectedPack(null);
     setUserCredential("");
+    setBuyError("");
+    setIsBuying(false);
     setIsShopOpen(true);
   };
 
   const handleSelectPack = (pack: { name: string; price: string }) => {
     haptic("light");
     setSelectedPack(pack);
+    setBuyError("");
     setShopStep(2);
   };
 
-  const handleConfirmCredentials = () => {
+  const handleBuy = async () => {
     if (!userCredential.trim()) {
       haptic("medium");
+      setBuyError("Iltimos, ID kiriting");
       return;
     }
-    setShopStep(3);
-  };
-
-  const handleFinishOrder = () => {
     if (!activeShopType || !selectedPack) return;
-    const orderJSON = {
-      action: "new_order",
-      service: activeShopType,
-      pack: selectedPack.name,
-      price: selectedPack.price,
-      credentials: userCredential,
-    };
-    sendDataToBot(orderJSON);
-    haptic("success");
-    setShopStep(4);
-    setTimeout(() => {
-      setIsShopOpen(false);
-      setShopStep(1);
-      setActiveShopType(null);
-      setSelectedPack(null);
-      setUserCredential("");
-    }, 2200);
+
+    setIsBuying(true);
+    setBuyError("");
+    try {
+      const res = await fetch("/api/buy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData: getInitData(),
+          service: activeShopType,
+          productName: selectedPack.name,
+          targetId: userCredential.trim(),
+          price: parseInt(selectedPack.price.replace(/[^\d]/g, ""), 10),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setBuyError(data.error === "INSUFFICIENT_BALANCE" ? "Balansingiz yetarli emas." : "Xatolik yuz berdi. Qayta urinib ko'ring.");
+        haptic("medium");
+        return;
+      }
+      haptic("success");
+      setShopStep(4);
+      loadBalance();
+      setTimeout(() => {
+        setIsShopOpen(false);
+        setShopStep(1);
+        setActiveShopType(null);
+        setSelectedPack(null);
+        setUserCredential("");
+        setBuyError("");
+      }, 2200);
+    } catch {
+      setBuyError("Server bilan bog'lanib bo'lmadi.");
+    } finally {
+      setIsBuying(false);
+    }
   };
 
   const handleOpenEdu = (type: EduType) => {
@@ -1034,36 +1057,31 @@ export default function Home() {
                   style={styles.input}
                   className="bt-search-input"
                 />
+                {buyError && (
+                  <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <span>{buyError}</span>
+                    {buyError === "Balansingiz yetarli emas." && (
+                      <button
+                        style={{ ...styles.btnPrimary, background: "linear-gradient(135deg,#B98BFF,#6E6BFF)" }}
+                        className="bt-primary-btn"
+                        onClick={() => { setIsShopOpen(false); handleOpenTopUp(); }}
+                      >
+                        <Icons.Wallet /> Hisobni to'ldirish
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div style={styles.btnRow}>
                   <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setShopStep(1)}>Orqaga</button>
-                  <button style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad }} className="bt-primary-btn" onClick={handleConfirmCredentials}>Davom etish</button>
+                  <button
+                    style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, opacity: isBuying ? 0.7 : 1 }}
+                    className="bt-primary-btn"
+                    onClick={handleBuy}
+                    disabled={isBuying}
+                  >
+                    {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {shopStep === 3 && selectedPack && (
-              <div style={styles.sheetBody}>
-                <div style={styles.paymentCard}>
-                  <p style={styles.paymentText}>
-                    Ushbu kartaga roppa-rosa <strong style={{ color: "#3DDC97" }}>{selectedPack.price}</strong> o'tkazing:
-                  </p>
-                  <div style={styles.cardBox}>
-                    <span style={styles.cardNumber}>8600 4910 2345 6789</span>
-                    <button style={styles.copyBtn} className="bt-copy-btn" onClick={() => {
-                      navigator.clipboard.writeText("8600491023456789");
-                      haptic("light");
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    }}>
-                      {copied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
-                    </button>
-                  </div>
-                  <div style={styles.cardHolder}>Karta egasi: MUSA A.</div>
-                </div>
-
-                <button style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, width: "100%", marginTop: "16px" }} className="bt-primary-btn" onClick={handleFinishOrder}>
-                  To'lovni tasdiqlash
-                </button>
               </div>
             )}
 
