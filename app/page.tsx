@@ -12,6 +12,16 @@ declare global {
         openLink: (url: string) => void;
         openTelegramLink: (url: string) => void;
         sendData: (data: string) => void;
+        initData?: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+            photo_url?: string;
+          };
+        };
         HapticFeedback?: {
           impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
           notificationOccurred: (type: "error" | "success" | "warning") => void;
@@ -184,6 +194,17 @@ const Icons = {
       <polyline points="9 6 15 12 9 18" />
     </svg>
   ),
+  ChevronLeft: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 6 9 12 15 18" />
+    </svg>
+  ),
+  User: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
   Rocket: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
@@ -264,6 +285,11 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [userBalance, setUserBalance] = useState(0);
 
+  // Навигация: home -> одна из категорий -> profile. Каждая — отдельный полноэкранный вид.
+  const [activeView, setActiveView] = useState<"home" | "market" | "study" | "jobs" | "profile">("home");
+  // Заглушка выбора языка в профиле — реального перевода пока нет, только визуальный выбор.
+  const [uiLanguage, setUiLanguage] = useState<"uz" | "ru" | "en">("uz");
+
   // BITTA AI (Gemini)
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [aiMessages, setAiMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
@@ -327,6 +353,20 @@ export default function Home() {
   const getInitData = (): string => {
     if (typeof window === "undefined") return "";
     return window.Telegram?.WebApp ? (window.Telegram.WebApp as any).initData ?? "" : "";
+  };
+
+  // Данные для отображения в профиле (имя/юзернейм/аватар) — берём напрямую из Telegram
+  // WebApp SDK на клиенте, отдельный запрос на сервер для этого не нужен.
+  const getTelegramProfile = () => {
+    if (typeof window === "undefined") return null;
+    const u = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (!u) return null;
+    return {
+      firstName: u.first_name ?? "",
+      lastName: u.last_name ?? "",
+      username: u.username ?? "",
+      photoUrl: u.photo_url ?? "",
+    };
   };
 
   const loadBalance = async () => {
@@ -603,6 +643,8 @@ export default function Home() {
     setSearchQuery("");
   };
 
+  const telegramProfile = activeView === "profile" ? getTelegramProfile() : null;
+
   return (
     <div style={styles.container}>
       <style dangerouslySetInnerHTML={{ __html: `
@@ -690,29 +732,31 @@ export default function Home() {
       <div style={styles.content}>
         {/* ХЕДЕР */}
         <header style={styles.header}>
+          {activeView === "home" ? (
+            <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("profile"); }}>
+              <Icons.User />
+            </button>
+          ) : (
+            <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("home"); }}>
+              <Icons.ChevronLeft />
+            </button>
+          )}
+
           <div style={styles.logoWrap}>
             <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad }}>
               <Icons.Sparkle />
             </span>
-            <span className="bt-display" style={styles.logoText}>bitta</span>
+            <span className="bt-display" style={styles.logoText}>
+              {activeView === "home" && "bitta"}
+              {activeView === "market" && "O'yin & Market"}
+              {activeView === "study" && "Ta'lim"}
+              {activeView === "jobs" && "Vakansiya"}
+              {activeView === "profile" && "Profil"}
+            </span>
           </div>
 
-          <div style={styles.searchWrapper}>
-            <div style={styles.searchIcon}><Icons.Search /></div>
-            <input
-              type="text"
-              placeholder="Nima kerak?"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={styles.searchInput}
-              className="bt-search-input"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn"><Icons.Close /></button>
-            )}
-          </div>
+          <div style={{ flex: 1 }} />
 
-          {/* КНОПКА ПОПОЛНЕНИЯ БАЛАНСА В ХЕДЕРЕ */}
           <button style={styles.topUpHeaderBtn} className="bt-primary-btn" onClick={handleOpenTopUp}>
             <Icons.Wallet />
             <span>{userBalance.toLocaleString("uz-UZ")} UZS</span>
@@ -724,154 +768,263 @@ export default function Home() {
           </button>
         </header>
 
-        {/* РЕЗУЛЬТАТЫ ПОИСКА */}
-        {q !== "" ? (
-          <div style={styles.resultsSection}>
-            <div style={styles.resultsHeader}>Qidiruv natijalari</div>
-            {filteredResults.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {filteredResults.map((item) => (
-                  <div key={item.id} style={styles.resultCard} className="bt-row" onClick={() => runResult(item.action)}>
-                    <div style={{ ...styles.resultIconBadge, background: item.theme.grad, boxShadow: `0 6px 16px ${item.theme.glow}` }}>
-                      <item.icon />
-                    </div>
-                    <div style={styles.resultBody}>
-                      <div style={styles.resultGroup}>{item.group}</div>
-                      <div style={styles.resultTitle}>{item.title}</div>
-                      <div style={styles.resultDesc}>{item.desc}</div>
-                    </div>
-                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+        {/* ===================== ГЛАВНАЯ ===================== */}
+        {activeView === "home" && (
+          <>
+            <div style={styles.searchWrapperFull}>
+              <div style={styles.searchIcon}><Icons.Search /></div>
+              <input
+                type="text"
+                placeholder="Nima kerak?"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={styles.searchInputFull}
+                className="bt-search-input"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn"><Icons.Close /></button>
+              )}
+            </div>
+
+            {q !== "" ? (
+              <div style={styles.resultsSection}>
+                <div style={styles.resultsHeader}>Qidiruv natijalari</div>
+                {filteredResults.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {filteredResults.map((item) => (
+                      <div key={item.id} style={styles.resultCard} className="bt-row" onClick={() => runResult(item.action)}>
+                        <div style={{ ...styles.resultIconBadge, background: item.theme.grad, boxShadow: `0 6px 16px ${item.theme.glow}` }}>
+                          <item.icon />
+                        </div>
+                        <div style={styles.resultBody}>
+                          <div style={styles.resultGroup}>{item.group}</div>
+                          <div style={styles.resultTitle}>{item.title}</div>
+                          <div style={styles.resultDesc}>{item.desc}</div>
+                        </div>
+                        <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring</div>
+                )}
               </div>
             ) : (
-              <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring</div>
+              <>
+                {/* HERO */}
+                <section style={styles.hero}>
+                  <div style={styles.heroBadge}><Icons.Sparkle /> Bitta ilovada — hammasi</div>
+                  <h1 className="bt-display" style={styles.heroTitle}>Nimadan boshlaymiz?</h1>
+                  <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda</p>
+                </section>
+
+                {/* 3 КРУПНЫХ РАЗДЕЛА */}
+                <div style={styles.categoryList}>
+                  <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("market"); }}>
+                    <div style={{ ...styles.categoryIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
+                      <Icons.Gamepad />
+                    </div>
+                    <div style={styles.categoryTextWrap}>
+                      <span style={styles.categoryTitle}>O'yin & Market</span>
+                      <span style={styles.categorySub}>PUBG, Free Fire, Steam, TG Premium</span>
+                    </div>
+                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+                  </button>
+
+                  <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("study"); }}>
+                    <div style={{ ...styles.categoryIconBadge, background: themes.teal.grad, boxShadow: `0 8px 18px ${themes.teal.glow}` }}>
+                      <Icons.Book />
+                    </div>
+                    <div style={styles.categoryTextWrap}>
+                      <span style={styles.categoryTitle}>O'qish va Imtihonlar</span>
+                      <span style={styles.categorySub}>IELTS, CEFR, Pravaga tayyorgarlik</span>
+                    </div>
+                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+                  </button>
+
+                  <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("jobs"); }}>
+                    <div style={{ ...styles.categoryIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
+                      <Icons.Briefcase />
+                    </div>
+                    <div style={styles.categoryTextWrap}>
+                      <span style={styles.categoryTitle}>Ishga Vakansiya</span>
+                      <span style={styles.categorySub}>Ish topish yoki xodim qidirish</span>
+                    </div>
+                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+                  </button>
+                </div>
+
+                {/* РЕКЛАМА */}
+                <section style={{ marginBottom: "20px" }}>
+                  <div style={styles.promoCard} className="bt-tile" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
+                    <div style={styles.promoBadge}><Icons.Sparkle /> Reklama xizmati</div>
+                    <div style={styles.promoTitle}>Bitta-da o'z brendingizni e'lon qiling!</div>
+                    <div style={styles.promoDesc}>Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.</div>
+                    <span style={styles.promoLinkBtn}>Murojaat qilish (@bitta_mngr) <Icons.ChevronRight /></span>
+                  </div>
+                </section>
+              </>
             )}
-          </div>
-        ) : (
-          <>
-            {/* HERO */}
-            <section style={styles.hero}>
-              <div style={styles.heroBadge}><Icons.Sparkle /> Bitta ilovada — hammasi</div>
-              <h1 className="bt-display" style={styles.heroTitle}>Nimadan boshlaymiz?</h1>
-              <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda</p>
-            </section>
-
-            {/* ДOНАT */}
-            <section style={styles.sectionBlock}>
-              <div style={styles.sectionHeader}>
-                <span style={{ ...styles.sectionLabel, background: "rgba(255,95,126,.14)", color: "#FF9DAF" }}><Icons.Gamepad /> O'yin & Donat</span>
-              </div>
-              <div style={styles.tileGrid}>
-                <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
-                  <div style={{ ...styles.tileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
-                    <Icons.Gamepad />
-                  </div>
-                  <span style={styles.tileTitle}>PUBG Mobile</span>
-                  <span style={styles.tileSub}>UC to'ldirish</span>
-                </button>
-
-                <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("freefire")}>
-                  <div style={{ ...styles.tileIconBadge, background: themes.gold.grad, boxShadow: `0 8px 18px ${themes.gold.glow}` }}>
-                    <Icons.Diamond />
-                  </div>
-                  <span style={styles.tileTitle}>Free Fire</span>
-                  <span style={styles.tileSub}>Almazlar</span>
-                </button>
-
-                <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("premium")}>
-                  <div style={{ ...styles.tileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
-                    <Icons.Premium />
-                  </div>
-                  <span style={styles.tileTitle}>TG Premium</span>
-                  <span style={styles.tileSub}>Tezkor obuna</span>
-                </button>
-
-                <button style={styles.tile} className="bt-tile" onClick={() => handleOpenShop("steam")}>
-                  <div style={{ ...styles.tileIconBadge, background: themes.blue.grad, boxShadow: `0 8px 18px ${themes.blue.glow}` }}>
-                    <Icons.Steam />
-                  </div>
-                  <span style={styles.tileTitle}>Steam</span>
-                  <span style={styles.tileSub}>Hamyon balansi</span>
-                </button>
-              </div>
-            </section>
-
-            {/* ОБУЧЕНИЕ */}
-            <section style={styles.sectionBlock}>
-              <div style={styles.sectionHeader}>
-                <span style={{ ...styles.sectionLabel, background: "rgba(55,229,196,.14)", color: "#7FF0D9" }}><Icons.Book /> Ta'lim & Imtihon</span>
-              </div>
-              <div style={styles.rowList}>
-                <button style={styles.row} className="bt-row" onClick={() => openLinkInside("https://ielts.gg")}>
-                  <div style={{ ...styles.rowIconBadge, background: themes.teal.grad, boxShadow: `0 6px 14px ${themes.teal.glow}` }}>
-                    <Icons.Book />
-                  </div>
-                  <div style={styles.rowBody}>
-                    <span style={styles.rowTitle}>IELTS.GG</span>
-                    <span style={styles.rowSub}>Professional IELTS imtihoniga tayyorgarlik</span>
-                  </div>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-
-                <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("cefr")}>
-                  <div style={{ ...styles.rowIconBadge, background: themes.violet.grad, boxShadow: `0 6px 14px ${themes.violet.glow}` }}>
-                    <Icons.Book />
-                  </div>
-                  <div style={styles.rowBody}>
-                    <span style={styles.rowTitle}>CEFR Imtihonlari</span>
-                    <span style={styles.rowSub}>Milliy sertifikat imtihon materiallari</span>
-                  </div>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-
-                <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("prava")}>
-                  <div style={{ ...styles.rowIconBadge, background: themes.gold.grad, boxShadow: `0 6px 14px ${themes.gold.glow}` }}>
-                    <Icons.Pravaga />
-                  </div>
-                  <div style={styles.rowBody}>
-                    <span style={styles.rowTitle}>Pravaga Tayyorgarlik</span>
-                    <span style={styles.rowSub}>Avtomobil imtihoni (GAI) testlari</span>
-                  </div>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-              </div>
-            </section>
-
-            {/* ВАКАНСИИ */}
-            <section style={styles.sectionBlock}>
-              <div style={styles.sectionHeader}>
-                <span style={{ ...styles.sectionLabel, background: "rgba(185,139,255,.14)", color: "#D5BCFF" }}><Icons.Briefcase /> Ishga Vakansiya</span>
-              </div>
-              <div style={styles.vacancyGrid}>
-                <button style={styles.tile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); }}>
-                  <div style={{ ...styles.tileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
-                    <Icons.Briefcase />
-                  </div>
-                  <span style={styles.tileTitle}>Ish topish</span>
-                  <span style={styles.tileSub}>Bo'sh vakansiyalar</span>
-                </button>
-
-                <button style={styles.tile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("worker"); setIsVacancyOpen(true); }}>
-                  <div style={{ ...styles.tileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
-                    <Icons.Briefcase />
-                  </div>
-                  <span style={styles.tileTitle}>Ishga olish</span>
-                  <span style={styles.tileSub}>Xodimlar rezyumesi</span>
-                </button>
-              </div>
-            </section>
-
-            {/* РЕКЛАМА */}
-            <section style={{ marginBottom: "20px" }}>
-              <div style={styles.promoCard} className="bt-tile" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
-                <div style={styles.promoBadge}><Icons.Sparkle /> Reklama xizmati</div>
-                <div style={styles.promoTitle}>Bitta-da o'z brendingizni e'lon qiling!</div>
-                <div style={styles.promoDesc}>Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.</div>
-                <span style={styles.promoLinkBtn}>Murojaat qilish (@bitta_mngr) <Icons.ChevronRight /></span>
-              </div>
-            </section>
           </>
+        )}
+
+        {/* ===================== O'YIN & MARKET ===================== */}
+        {activeView === "market" && (
+          <div style={styles.bigTileList}>
+            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
+              <div style={{ ...styles.bigTileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
+                <Icons.Gamepad />
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>PUBG Mobile</span>
+                <span style={styles.categorySub}>UC to'ldirish</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+
+            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("freefire")}>
+              <div style={{ ...styles.bigTileIconBadge, background: themes.gold.grad, boxShadow: `0 8px 18px ${themes.gold.glow}` }}>
+                <Icons.Diamond />
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>Free Fire</span>
+                <span style={styles.categorySub}>Almazlar</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+
+            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("premium")}>
+              <div style={{ ...styles.bigTileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
+                <Icons.Premium />
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>TG Premium</span>
+                <span style={styles.categorySub}>Tezkor obuna</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+
+            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("steam")}>
+              <div style={{ ...styles.bigTileIconBadge, background: themes.blue.grad, boxShadow: `0 8px 18px ${themes.blue.glow}` }}>
+                <Icons.Steam />
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>Steam</span>
+                <span style={styles.categorySub}>Hamyon balansi</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+          </div>
+        )}
+
+        {/* ===================== O'QISH VA IMTIHONLAR ===================== */}
+        {activeView === "study" && (
+          <div style={styles.rowList}>
+            <button style={styles.row} className="bt-row" onClick={() => openLinkInside("https://ielts.gg")}>
+              <div style={{ ...styles.rowIconBadge, background: themes.teal.grad, boxShadow: `0 6px 14px ${themes.teal.glow}` }}>
+                <Icons.Book />
+              </div>
+              <div style={styles.rowBody}>
+                <span style={styles.rowTitle}>IELTS.GG</span>
+                <span style={styles.rowSub}>Professional IELTS imtihoniga tayyorgarlik</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+
+            <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("cefr")}>
+              <div style={{ ...styles.rowIconBadge, background: themes.violet.grad, boxShadow: `0 6px 14px ${themes.violet.glow}` }}>
+                <Icons.Book />
+              </div>
+              <div style={styles.rowBody}>
+                <span style={styles.rowTitle}>CEFR Imtihonlari</span>
+                <span style={styles.rowSub}>Milliy sertifikat imtihon materiallari</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+
+            <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("prava")}>
+              <div style={{ ...styles.rowIconBadge, background: themes.gold.grad, boxShadow: `0 6px 14px ${themes.gold.glow}` }}>
+                <Icons.Pravaga />
+              </div>
+              <div style={styles.rowBody}>
+                <span style={styles.rowTitle}>Pravaga Tayyorgarlik</span>
+                <span style={styles.rowSub}>Avtomobil imtihoni (GAI) testlari</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+          </div>
+        )}
+
+        {/* ===================== ISHGA VAKANSIYA ===================== */}
+        {activeView === "jobs" && (
+          <div style={styles.bigTileList}>
+            <button style={styles.bigTile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); }}>
+              <div style={{ ...styles.bigTileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
+                <Icons.Briefcase />
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>Ish topish</span>
+                <span style={styles.categorySub}>Bo'sh vakansiyalar</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+
+            <button style={styles.bigTile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("worker"); setIsVacancyOpen(true); }}>
+              <div style={{ ...styles.bigTileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
+                <Icons.Briefcase />
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>Ishga olish</span>
+                <span style={styles.categorySub}>Xodimlar rezyumesi</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+          </div>
+        )}
+
+        {/* ===================== PROFIL ===================== */}
+        {activeView === "profile" && (
+          <div style={styles.profileWrap}>
+            <div style={styles.profileCard}>
+              {telegramProfile?.photoUrl ? (
+                <img src={telegramProfile.photoUrl} alt="" style={styles.profileAvatarImg} />
+              ) : (
+                <div style={styles.profileAvatarFallback}><Icons.User /></div>
+              )}
+              <div style={styles.profileName}>
+                {telegramProfile?.firstName || "Foydalanuvchi"} {telegramProfile?.lastName || ""}
+              </div>
+              {telegramProfile?.username && <div style={styles.profileUsername}>@{telegramProfile.username}</div>}
+            </div>
+
+            <div style={styles.menuBalanceCard}>
+              <div style={{ fontSize: "12px", color: "#A79FC2" }}>Hisobingiz:</div>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: "#3DDC97", margin: "2px 0 10px 0" }}>
+                {userBalance.toLocaleString("uz-UZ")} UZS
+              </div>
+              <button style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }} className="bt-primary-btn" onClick={handleOpenTopUp}>
+                <Icons.Wallet /> Balansni to'ldirish
+              </button>
+            </div>
+
+            <div style={styles.profileSectionLabel}>Til</div>
+            <div style={styles.langRow}>
+              <button style={{ ...styles.langPill, ...(uiLanguage === "uz" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("uz")}>O'zbekcha</button>
+              <button style={{ ...styles.langPill, ...(uiLanguage === "ru" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("ru")}>Русский</button>
+              <button style={{ ...styles.langPill, ...(uiLanguage === "en" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("en")}>English</button>
+            </div>
+            <p style={{ fontSize: "11px", color: "#7E7694", margin: "6px 0 20px 0" }}>Boshqa tillar tez orada qo'shiladi.</p>
+
+            <div style={styles.profileSectionLabel}>Yordam</div>
+            <div style={styles.menuList}>
+              <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
+                <Icons.Headphones /> Qo'llab-quvvatlash (@bitta_mngr)
+              </button>
+              <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_official")}>
+                <Icons.Megaphone /> Rasmiy kanal
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1262,35 +1415,36 @@ export default function Home() {
           <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsMenuOpen(false)} />
           <div style={styles.drawer}>
             <div style={styles.drawerHeader}>
-              <div style={styles.drawerTitle}>Menyu</div>
+              <div style={styles.drawerTitle}>Bo'limlar</div>
               <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsMenuOpen(false)}><Icons.Close /></button>
             </div>
 
             <div style={styles.drawerBody}>
-              {/* БАЛАНС В МЕНЮ */}
-              <div style={styles.menuBalanceCard}>
-                <div style={{ fontSize: "12px", color: "#A79FC2" }}>Hisobingiz:</div>
-                <div style={{ fontSize: "18px", fontWeight: 700, color: "#3DDC97", margin: "2px 0 8px 0" }}>
-                  {userBalance.toLocaleString("uz-UZ")} UZS
-                </div>
-                <button
-                  style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", padding: "8px", fontSize: "12px" }}
-                  className="bt-primary-btn"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    handleOpenTopUp();
-                  }}
-                >
-                  <Icons.Wallet /> Balansni to'ldirish
+              <div style={styles.drawerGroupLabel}>Xizmatlar</div>
+              <div style={styles.menuNavList}>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("market"); setIsMenuOpen(false); }}>
+                  <div style={{ ...styles.menuNavIconBadge, background: themes.pink.grad }}><Icons.Gamepad /></div>
+                  <span style={styles.menuNavText}>O'yin & Market</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+                </button>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("study"); setIsMenuOpen(false); }}>
+                  <div style={{ ...styles.menuNavIconBadge, background: themes.teal.grad }}><Icons.Book /></div>
+                  <span style={styles.menuNavText}>O'qish va Imtihonlar</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+                </button>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("jobs"); setIsMenuOpen(false); }}>
+                  <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Briefcase /></div>
+                  <span style={styles.menuNavText}>Ishga Vakansiya</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
               </div>
 
-              <div style={styles.menuList}>
-                <button style={styles.menuItem} onClick={() => { setIsMenuOpen(false); openTelegramLink("https://t.me/bitta_mngr"); }}>
-                  <Icons.Headphones /> Qo'llab-quvvatlash (@bitta_mngr)
-                </button>
-                <button style={styles.menuItem} onClick={() => { setIsMenuOpen(false); openTelegramLink("https://t.me/bitta_official"); }}>
-                  <Icons.Megaphone /> Rasmiy kanal
+              <div style={styles.drawerGroupLabel}>Hisob</div>
+              <div style={styles.menuNavList}>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("profile"); setIsMenuOpen(false); }}>
+                  <div style={{ ...styles.menuNavIconBadge, background: "linear-gradient(135deg,#7E7694,#5A536E)" }}><Icons.User /></div>
+                  <span style={styles.menuNavText}>Profil va sozlamalar</span>
+                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
               </div>
             </div>
@@ -2129,5 +2283,226 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#A79FC2",
     fontSize: "13px",
     padding: "20px",
+  },
+
+  // ===== Навигация (профиль/назад в хедере) =====
+  iconNavBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "36px",
+    height: "36px",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    color: "#FFF",
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+
+  // ===== Поиск на главной (вынесен из хедера, во всю ширину) =====
+  searchWrapperFull: {
+    position: "relative",
+    marginBottom: "18px",
+  },
+  searchInputFull: {
+    width: "100%",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "14px",
+    padding: "13px 40px",
+    color: "#FFF",
+    fontSize: "14px",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+
+  // ===== 3 крупные карточки-раздела на главной =====
+  categoryList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    marginBottom: "18px",
+  },
+  categoryCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: "16px",
+    padding: "14px",
+    cursor: "pointer",
+    textAlign: "left",
+    width: "100%",
+  },
+  categoryIconBadge: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "13px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    flexShrink: 0,
+  },
+  categoryTextWrap: {
+    display: "flex",
+    flexDirection: "column",
+    flexGrow: 1,
+    minWidth: 0,
+  },
+  categoryTitle: {
+    fontSize: "14.5px",
+    fontWeight: 700,
+    color: "#FFF",
+  },
+  categorySub: {
+    fontSize: "11.5px",
+    color: "#A79FC2",
+    marginTop: "2px",
+  },
+
+  // ===== Крупные кнопки внутри раздела (O'yin & Market, Ishga Vakansiya) =====
+  bigTileList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    marginBottom: "20px",
+  },
+  bigTile: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: "16px",
+    padding: "16px",
+    cursor: "pointer",
+    textAlign: "left",
+    width: "100%",
+  },
+  bigTileIconBadge: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "15px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    flexShrink: 0,
+  },
+
+  // ===== Профиль =====
+  profileWrap: {
+    display: "flex",
+    flexDirection: "column",
+    paddingBottom: "20px",
+  },
+  profileCard: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+    padding: "22px 0 18px 0",
+  },
+  profileAvatarImg: {
+    width: "72px",
+    height: "72px",
+    borderRadius: "50%",
+    objectFit: "cover",
+    marginBottom: "10px",
+  },
+  profileAvatarFallback: {
+    width: "72px",
+    height: "72px",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    marginBottom: "10px",
+  },
+  profileName: {
+    fontSize: "16px",
+    fontWeight: 700,
+    color: "#FFF",
+  },
+  profileUsername: {
+    fontSize: "12.5px",
+    color: "#A79FC2",
+    marginTop: "2px",
+  },
+  profileSectionLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    color: "#7E7694",
+    textTransform: "uppercase",
+    letterSpacing: "0.4px",
+    margin: "18px 0 8px 2px",
+  },
+  langRow: {
+    display: "flex",
+    gap: "8px",
+  },
+  langPill: {
+    flex: 1,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "10px",
+    padding: "9px",
+    color: "#A79FC2",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  langPillActive: {
+    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
+    borderColor: "transparent",
+    color: "#FFF",
+  },
+
+  // ===== Боковое меню: список разделов (вместо старого меню языка/поддержки) =====
+  drawerGroupLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    color: "#7E7694",
+    textTransform: "uppercase",
+    letterSpacing: "0.4px",
+    margin: "14px 0 8px 2px",
+  },
+  menuNavList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  menuNavItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    borderRadius: "12px",
+    padding: "11px 12px",
+    cursor: "pointer",
+    textAlign: "left",
+    width: "100%",
+  },
+  menuNavIconBadge: {
+    width: "32px",
+    height: "32px",
+    borderRadius: "9px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFF",
+    flexShrink: 0,
+  },
+  menuNavText: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#FFF",
+    flexGrow: 1,
   },
 };
