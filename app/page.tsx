@@ -91,12 +91,6 @@ const shopProducts: Record<
   },
 };
 
-const mockVacancies = [
-  { id: 1, title: "Next.js va WebApp dasturchi kerak", budget: "500,000 UZS", desc: "Bitta loyihasini rivojlantirish uchun tajribali dasturchi taklif etiladi.", type: "job", contact: "@bitta_mngr" },
-  { id: 2, title: "SMM / Grafik Dizayner", budget: "1,200,000 UZS/oy", desc: "Kanal postlari va vizuallari bilan ishlash uchun professional.", type: "job", contact: "@bitta_mngr" },
-  { id: 3, title: "UI/UX Dizayn xizmati", budget: "Kelishilgan narxda", desc: "Sizning g'oyalaringizni chiroyli va qulay interfeysga aylantirib beraman.", type: "worker", contact: "@musa_design" },
-];
-
 // ===================== ИКОНКИ =====================
 
 const Icons = {
@@ -328,12 +322,17 @@ export default function Home() {
   const [vacancyTab, setVacancyTab] = useState<"job" | "worker">("job");
   const [isCreatingVacancy, setIsCreatingVacancy] = useState(false);
   const [vacSubmitted, setVacSubmitted] = useState(false);
+  const [vacancies, setVacancies] = useState<{ id: string; title: string; budget: string; description: string; contact: string }[]>([]);
+  const [isLoadingVacancies, setIsLoadingVacancies] = useState(false);
+  const [vacListError, setVacListError] = useState("");
 
   const [newVacType, setNewVacType] = useState<"job" | "worker">("job");
   const [newVacTitle, setNewVacTitle] = useState("");
   const [newVacBudget, setNewVacBudget] = useState("");
   const [newVacDesc, setNewVacDesc] = useState("");
   const [newVacContact, setNewVacContact] = useState("");
+  const [isSubmittingVacancy, setIsSubmittingVacancy] = useState(false);
+  const [vacSubmitError, setVacSubmitError] = useState("");
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -592,31 +591,68 @@ export default function Home() {
     setIsEduOpen(true);
   };
 
-  const handleCreateVacancy = () => {
-    if (!newVacTitle || !newVacBudget || !newVacDesc || !newVacContact) {
+  const loadVacancies = async (type: "job" | "worker") => {
+    setIsLoadingVacancies(true);
+    setVacListError("");
+    try {
+      const res = await fetch(`/api/vacancies?type=${type}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error();
+      setVacancies(data.vacancies ?? []);
+    } catch {
+      setVacListError("Ro'yxatni yuklab bo'lmadi. Qayta urinib ko'ring.");
+    } finally {
+      setIsLoadingVacancies(false);
+    }
+  };
+
+  // Как только шторка открыта (и мы не в форме создания) — грузим актуальный список под выбранную вкладку.
+  useEffect(() => {
+    if (isVacancyOpen && !isCreatingVacancy) {
+      loadVacancies(vacancyTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVacancyOpen, vacancyTab, isCreatingVacancy]);
+
+  const handleCreateVacancy = async () => {
+    if (!newVacTitle.trim() || !newVacBudget.trim() || !newVacDesc.trim() || !newVacContact.trim()) {
       haptic("medium");
+      setVacSubmitError("Barcha maydonlarni to'ldiring");
       return;
     }
-    const vacancyJSON = {
-      action: "create_vacancy",
-      type: newVacType,
-      title: newVacTitle,
-      budget: newVacBudget,
-      desc: newVacDesc,
-      contact: newVacContact,
-    };
-    sendDataToBot(vacancyJSON);
-    haptic("success");
-    setVacSubmitted(true);
-    setTimeout(() => {
-      setIsCreatingVacancy(false);
-      setIsVacancyOpen(false);
-      setVacSubmitted(false);
-      setNewVacTitle("");
-      setNewVacBudget("");
-      setNewVacDesc("");
-      setNewVacContact("");
-    }, 1800);
+    setIsSubmittingVacancy(true);
+    setVacSubmitError("");
+    try {
+      const res = await fetch("/api/vacancies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData: getInitData(),
+          type: newVacType,
+          title: newVacTitle.trim(),
+          budget: newVacBudget.trim(),
+          description: newVacDesc.trim(),
+          contact: newVacContact.trim(),
+        }),
+      });
+      if (!res.ok) throw new Error();
+      haptic("success");
+      setVacSubmitted(true);
+      setTimeout(() => {
+        setIsCreatingVacancy(false);
+        setIsVacancyOpen(false);
+        setVacSubmitted(false);
+        setNewVacTitle("");
+        setNewVacBudget("");
+        setNewVacDesc("");
+        setNewVacContact("");
+      }, 1800);
+    } catch {
+      setVacSubmitError("Yuborib bo'lmadi. Qayta urinib ko'ring.");
+      haptic("medium");
+    } finally {
+      setIsSubmittingVacancy(false);
+    }
   };
 
   // Поиск по всему приложению
@@ -1318,22 +1354,32 @@ export default function Home() {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "240px", overflowY: "auto", margin: "14px 0" }}>
-                    {mockVacancies.filter(v => v.type === vacancyTab).map(vac => (
-                      <div key={vac.id} style={styles.vacCard}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={styles.vacTitle}>{vac.title}</div>
-                          <div style={styles.vacBudget}>{vac.budget}</div>
-                        </div>
-                        <div style={styles.vacDesc}>{vac.desc}</div>
-                        <button
-                          style={styles.vacApplyBtn}
-                          className="bt-secondary-btn"
-                          onClick={() => openTelegramLink(`https://t.me/${vac.contact.replace('@', '')}`)}
-                        >
-                          Bog'lanish ({vac.contact})
-                        </button>
+                    {isLoadingVacancies ? (
+                      <div style={{ textAlign: "center", color: "#A79FC2", fontSize: "12.5px", padding: "20px 0" }}>Yuklanmoqda...</div>
+                    ) : vacListError ? (
+                      <div style={{ textAlign: "center", color: "#FF9DAF", fontSize: "12.5px", padding: "20px 0" }}>{vacListError}</div>
+                    ) : vacancies.length === 0 ? (
+                      <div style={{ textAlign: "center", color: "#A79FC2", fontSize: "12.5px", padding: "20px 0" }}>
+                        Hozircha e'lonlar yo'q. Birinchi bo'lib joylashtiring!
                       </div>
-                    ))}
+                    ) : (
+                      vacancies.map((vac) => (
+                        <div key={vac.id} style={styles.vacCard}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={styles.vacTitle}>{vac.title}</div>
+                            <div style={styles.vacBudget}>{vac.budget}</div>
+                          </div>
+                          <div style={styles.vacDesc}>{vac.description}</div>
+                          <button
+                            style={styles.vacApplyBtn}
+                            className="bt-secondary-btn"
+                            onClick={() => openTelegramLink(`https://t.me/${vac.contact.replace('@', '')}`)}
+                          >
+                            Bog'lanish ({vac.contact})
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
 
                   <button
@@ -1350,7 +1396,7 @@ export default function Home() {
                     <Icons.Check />
                   </div>
                   <div style={styles.successTitle}>E'loningiz yuborildi!</div>
-                  <div style={styles.successSub}>Moderatorlar ko'rib chiqqach e'lon kanalda va ilovada paydo bo'ladi.</div>
+                  <div style={styles.successSub}>E'loningiz darhol ro'yxatda ko'rinadi.</div>
                 </div>
               ) : (
                 <div>
@@ -1398,9 +1444,20 @@ export default function Home() {
                     style={{ ...styles.input, marginBottom: "14px" }}
                   />
 
+                  {vacSubmitError && (
+                    <div style={{ color: "#FF9DAF", fontSize: "12px", marginBottom: "10px" }}>{vacSubmitError}</div>
+                  )}
+
                   <div style={styles.btnRow}>
                     <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setIsCreatingVacancy(false)}>Bekor qilish</button>
-                    <button style={{ ...styles.btnPrimary, background: themes.violet.grad }} className="bt-primary-btn" onClick={handleCreateVacancy}>Tasdiqlash</button>
+                    <button
+                      style={{ ...styles.btnPrimary, background: themes.violet.grad, opacity: isSubmittingVacancy ? 0.7 : 1 }}
+                      className="bt-primary-btn"
+                      onClick={handleCreateVacancy}
+                      disabled={isSubmittingVacancy}
+                    >
+                      {isSubmittingVacancy ? "Yuborilmoqda..." : "Tasdiqlash"}
+                    </button>
                   </div>
                 </div>
               )}
@@ -1672,6 +1729,8 @@ const styles: Record<string, React.CSSProperties> = {
   searchIcon: {
     position: "absolute",
     left: "10px",
+    top: "50%",
+    transform: "translateY(-50%)",
     color: "#7E7694",
     display: "flex",
     alignItems: "center",

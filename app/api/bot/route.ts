@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDeposit, approveDeposit, rejectDeposit, getOrder, completeOrder, refundOrder } from "@/lib/db";
+import {
+  getDeposit,
+  approveDeposit,
+  rejectDeposit,
+  getOrder,
+  completeOrder,
+  refundOrder,
+  getVacancy,
+  archiveVacancy,
+} from "@/lib/db";
 import { answerCallbackQuery, editDecision, sendMessage } from "@/lib/telegram";
 
 const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_IDS ?? "")
@@ -90,6 +99,23 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       const message = e instanceof Error ? e.message : "UNKNOWN";
       await answerCallbackQuery(cb.id, message.includes("ALREADY_DECIDED") ? "Bu buyurtma allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi", true);
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
+  // ===== Вакансии/резюме =====
+  if (domain === "vac") {
+    const vacancy = await getVacancy(id);
+    if (!vacancy) {
+      await answerCallbackQuery(cb.id, "E'lon topilmadi", true);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "archive") {
+      await archiveVacancy(id);
+      await editDecision(chatId, messageId, hasPhoto, `🗑 <b>O'chirildi</b> — ${vacancy.title}`);
+      await answerCallbackQuery(cb.id, "O'chirildi");
     }
 
     return NextResponse.json({ ok: true });

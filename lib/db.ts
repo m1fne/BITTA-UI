@@ -132,4 +132,63 @@ export async function completeOrder(orderId: string): Promise<void> {
 export async function refundOrder(orderId: string): Promise<void> {
   const { error } = await supabase.rpc("refund_order", { p_order_id: orderId });
   if (error) throw error;
+}// ===== Добавить в конец существующего lib/db.ts =====
+
+export interface Vacancy {
+  id: string;
+  user_id: number;
+  type: "job" | "worker";
+  title: string;
+  budget: string;
+  description: string;
+  contact: string;
+  status: "active" | "archived";
+  created_at: string;
+}
+
+export async function createVacancy(input: {
+  userId: number;
+  type: "job" | "worker";
+  title: string;
+  budget: string;
+  description: string;
+  contact: string;
+}): Promise<Vacancy> {
+  const { data, error } = await supabase
+    .from("vacancies")
+    .insert({
+      user_id: input.userId,
+      type: input.type,
+      title: input.title,
+      budget: input.budget,
+      description: input.description,
+      contact: input.contact,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Vacancy;
+}
+
+export async function listVacancies(type: "job" | "worker", limit = 30): Promise<Vacancy[]> {
+  const { data, error } = await supabase
+    .from("vacancies")
+    .select("*")
+    .eq("type", type)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Vacancy[];
+}
+
+export async function getVacancy(id: string): Promise<Vacancy | null> {
+  const { data, error } = await supabase.from("vacancies").select("*").eq("id", id).single();
+  if (error) return null;
+  return data as Vacancy;
+}
+
+export async function archiveVacancy(id: string): Promise<void> {
+  const { error } = await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
+  if (error) throw error;
 }
