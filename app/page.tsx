@@ -596,11 +596,14 @@ export default function Home() {
     setVacListError("");
     try {
       const res = await fetch(`/api/vacancies?type=${type}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setVacListError(`Xatolik: ${data.error ?? "HTTP " + res.status}`);
+        return;
+      }
       setVacancies(data.vacancies ?? []);
     } catch {
-      setVacListError("Ro'yxatni yuklab bo'lmadi. Qayta urinib ko'ring.");
+      setVacListError("Server bilan bog'lanib bo'lmadi (tarmoq xatosi).");
     } finally {
       setIsLoadingVacancies(false);
     }
@@ -635,7 +638,12 @@ export default function Home() {
           contact: newVacContact.trim(),
         }),
       });
-      if (!res.ok) throw new Error();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setVacSubmitError(`Xatolik: ${data.error ?? "HTTP " + res.status}`);
+        haptic("medium");
+        return;
+      }
       haptic("success");
       setVacSubmitted(true);
       setTimeout(() => {
@@ -648,7 +656,7 @@ export default function Home() {
         setNewVacContact("");
       }, 1800);
     } catch {
-      setVacSubmitError("Yuborib bo'lmadi. Qayta urinib ko'ring.");
+      setVacSubmitError("Server bilan bog'lanib bo'lmadi (tarmoq xatosi).");
       haptic("medium");
     } finally {
       setIsSubmittingVacancy(false);
