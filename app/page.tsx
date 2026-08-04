@@ -640,7 +640,7 @@ export default function Home() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        setVacSubmitError(`Xatolik: ${data.error ?? "HTTP " + res.status}`);
+        setVacSubmitError(`Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`);
         haptic("medium");
         return;
       }

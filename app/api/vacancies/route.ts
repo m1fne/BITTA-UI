@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyTelegramInitData } from "@/lib/telegram-auth";
+import { debugVerifyTelegramInitData } from "@/lib/telegram-auth";
 import { getOrCreateUser, createVacancy, listVacancies } from "@/lib/db";
 import { sendMessage, escapeHtml } from "@/lib/telegram";
 
@@ -23,8 +23,10 @@ export async function POST(req: NextRequest) {
   const description: string | undefined = body?.description;
   const contact: string | undefined = body?.contact;
 
-  const tgUser = initData ? verifyTelegramInitData(initData) : null;
-  if (!tgUser) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  // Временно: debugVerifyTelegramInitData вместо verifyTelegramInitData — чтобы увидеть
+  // ТОЧНУЮ причину отказа (reason), а не просто "не прошло". Убрать после отладки.
+  const { user: tgUser, reason } = debugVerifyTelegramInitData(initData ?? "");
+  if (!tgUser) return NextResponse.json({ error: "UNAUTHORIZED", reason }, { status: 401 });
 
   if ((type !== "job" && type !== "worker") || !title?.trim() || !budget?.trim() || !description?.trim() || !contact?.trim()) {
     return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
