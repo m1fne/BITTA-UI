@@ -468,19 +468,23 @@ export default function Home() {
       if (topUpReceiptFile) form.append("receipt", topUpReceiptFile);
 
       const res = await fetch("/api/deposit", { method: "POST", body: form });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setTopUpStatus("error");
-        setTopUpError(data.error === "INVALID_AMOUNT" ? `Minimal summa: ${data.minAmount.toLocaleString("uz-UZ")} so'm` : "Xatolik yuz berdi");
+        setTopUpError(
+          data.error === "INVALID_AMOUNT"
+            ? `Minimal summa: ${data.minAmount?.toLocaleString("uz-UZ")} so'm`
+            : `Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`
+        );
         haptic("medium");
         return;
       }
       setDepositId(data.deposit.id);
       setTopUpStatus("pending");
       haptic("success");
-    } catch {
+    } catch (e) {
       setTopUpStatus("error");
-      setTopUpError("Server bilan bog'lanib bo'lmadi");
+      setTopUpError(`Tarmoq xatosi: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -507,14 +511,14 @@ export default function Home() {
           history: nextMessages.slice(-10, -1),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.reply) {
-        setAiError(data.error === "RATE_LIMIT" ? "AI hozir band, birozdan so'ng qayta urinib ko'ring." : "Javob olib bo'lmadi. Qayta urinib ko'ring.");
+        setAiError(`Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`);
         return;
       }
       setAiMessages((prev) => [...prev, { role: "assistant", text: data.reply }]);
-    } catch {
-      setAiError("Server bilan bog'lanib bo'lmadi.");
+    } catch (e) {
+      setAiError(`Tarmoq xatosi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsAiLoading(false);
     }

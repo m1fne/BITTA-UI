@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyTelegramInitData } from "@/lib/telegram-auth";
+import { debugVerifyTelegramInitData } from "@/lib/telegram-auth";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const GEMINI_MODEL = "gemini-2.5-flash"; // стабильная модель с бесплатным лимитом на момент написания
@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
 
   // Без этой проверки кто угодно мог бы дёргать эндпоинт напрямую и сжигать
   // общий бесплатный лимит Gemini в обход самой WebApp.
-  const tgUser = initData ? verifyTelegramInitData(initData) : null;
+  const { user: tgUser, reason } = debugVerifyTelegramInitData(initData ?? "");
   if (!tgUser) {
-    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    return NextResponse.json({ error: "UNAUTHORIZED", reason }, { status: 401 });
   }
 
   if (!message?.trim() || message.length > 1500) {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       console.error("Gemini error:", res.status, errText);
-      return NextResponse.json({ error: "AI_ERROR" }, { status: 502 });
+      return NextResponse.json({ error: "AI_ERROR", reason: `gemini_http_${res.status}` }, { status: 502 });
     }
 
     const data = await res.json();
@@ -76,6 +76,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ reply: reply.trim() });
   } catch (e) {
     console.error("Gemini request failed:", e);
-    return NextResponse.json({ error: "AI_ERROR" }, { status: 502 });
+    return NextResponse.json({ error: "AI_ERROR", reason: "fetch_failed" }, { status: 502 });
   }
 }
