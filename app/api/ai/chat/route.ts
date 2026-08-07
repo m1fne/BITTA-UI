@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       console.error("Gemini error:", res.status, errText);
-      return NextResponse.json({ error: "AI_ERROR", reason: `gemini_http_${res.status}` }, { status: 502 });
+      return NextResponse.json({ error: "AI_ERROR", reason: `gemini_${res.status}: ${errText.slice(0, 200)}` }, { status: 502 });
     }
 
     const data = await res.json();
