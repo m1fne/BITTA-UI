@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { debugVerifyTelegramInitData } from "@/lib/telegram-auth";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
-const GEMINI_MODEL = "gemini-2.5-flash"; // стабильная модель с бесплатным лимитом на момент написания
+const GEMINI_MODEL = "gemini-3.6-flash"; // актуальная бесплатная модель (2.5-flash сняли с раздачи новым пользователям в 2026)
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SYSTEM_PROMPT =
