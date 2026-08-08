@@ -10,6 +10,8 @@ const SYSTEM_PROMPT =
   "Ilova orqali PUBG/Free Fire/Steam/Telegram Premium uchun donat qilish, " +
   "CEFR va GAI (pravaga) imtihonlariga tayyorgarlik, ish topish/joylashtirish va hisobni to'ldirish mumkin. " +
   "Savollarga qisqa, aniq va do'stona javob bering, asosan o'zbek tilida (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob bering). " +
+  "Javobni har doim tugallang, gapni yarim yo'lda tashlab ketmang. " +
+  "Javobda hech qanday Markdown belgilaridan foydalanmang — **, *, #, - kabi belgilarsiz, faqat oddiy matn yozing. " +
   "Agar savol ilovaga aloqasi bo'lmasa ham, oddiy foydali yordamchi sifatida javob bering.";
 
 interface ChatMessage {
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents,
-        generationConfig: { maxOutputTokens: 500, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: 1024 },
       }),
     });
 
