@@ -868,8 +868,12 @@ export default function Home() {
                   <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda</p>
                 </section>
 
-                {/* 3 КРУПНЫХ РАЗДЕЛА */}
+{/* 3 КРУПНЫХ РАЗДЕЛА (Теперь 4 с ТОП-блоком!) */}
                 <div style={styles.categoryList}>
+
+                  {/* 🚀 НАШ НОВЫЙ ТОП БЛОК */}
+                  <TopSection />
+
                   <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("market"); }}>
                     <div style={{ ...styles.categoryIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
                       <Icons.Gamepad />
