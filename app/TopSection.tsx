@@ -1,12 +1,13 @@
+"use client";
 import React from 'react';
 
-// Замени эти данные на актуальные полезные функции этого месяца
+// Тексты на латинице
 const TOP_DATA = {
-  badge: "TOP",
-  title: "Энг фойдали хизматлар",
-  description: "Ойнинг энг оммабоп бўлимлари ва бонуслари",
+  badge: "✨ TOP",
+  title: "Eng foydali xizmatlar",
+  description: "Oylik eng ommabop bo'limlar, PUBG, Steam va maxsus bonuslar",
   icon: "🔥",
-  link: "#" // Ссылка на нужную страницу/функцию
+  link: "#"
 };
 
 export default function TopSection() {
@@ -14,12 +15,13 @@ export default function TopSection() {
     <div style={styles.card} onClick={() => console.log('Top clicked')}>
       <div style={styles.badge}>{TOP_DATA.badge}</div>
       <div style={styles.content}>
-        <div style={styles.icon}>{TOP_DATA.icon}</div>
+        <div style={styles.iconBox}>
+          <span style={styles.icon}>{TOP_DATA.icon}</span>
+        </div>
         <div style={styles.info}>
           <h3 style={styles.title}>{TOP_DATA.title}</h3>
           <p style={styles.desc}>{TOP_DATA.description}</p>
         </div>
-        <div style={styles.arrow}>›</div>
       </div>
     </div>
   );
@@ -28,60 +30,61 @@ export default function TopSection() {
 const styles: { [key: string]: React.CSSProperties } = {
   card: {
     position: 'relative',
-    background: 'linear-gradient(135deg, rgba(255, 107, 0, 0.2) 0%, rgba(147, 51, 234, 0.2) 100%)',
-    border: '1px solid rgba(255, 138, 0, 0.45)',
-    borderRadius: '20px',
-    padding: '16px',
-    marginBottom: '12px',
-    backdropFilter: 'blur(10px)',
+    background: 'linear-gradient(135deg, rgba(255, 107, 0, 0.15) 0%, rgba(147, 51, 234, 0.25) 100%)',
+    border: '1px solid rgba(255, 138, 0, 0.5)',
+    borderRadius: '24px',
+    padding: '20px 18px', // Увеличили отступы, чтобы карточка стала выше и квадратнее
+    marginBottom: '16px',
+    backdropFilter: 'blur(12px)',
     cursor: 'pointer',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+    boxShadow: '0 8px 24px rgba(255, 107, 0, 0.15)'
   },
   badge: {
     position: 'absolute',
-    top: '-10px',
-    left: '16px',
+    top: '-11px',
+    left: '20px',
     background: 'linear-gradient(90deg, #FF8A00 0%, #FF005C 100%)',
-    color: '#fff',
+    color: '#ffffff',
     fontSize: '11px',
     fontWeight: 800,
-    padding: '3px 10px',
-    borderRadius: '12px',
-    letterSpacing: '0.5px',
-    boxShadow: '0 2px 8px rgba(255, 0, 92, 0.4)'
+    padding: '4px 12px',
+    borderRadius: '14px',
+    letterSpacing: '0.6px',
+    boxShadow: '0 4px 12px rgba(255, 0, 92, 0.4)'
   },
   content: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px'
+    gap: '16px'
   },
-  icon: {
-    width: '48px',
-    height: '48px',
-    background: 'linear-gradient(135deg, #FF8A00, #FF005C)',
-    borderRadius: '14px',
+  iconBox: {
+    width: '56px', // Более крупный квадратный блок под иконку
+    height: '56px',
+    background: 'linear-gradient(135deg, #FF8A00 0%, #FF005C 100%)',
+    borderRadius: '18px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '22px',
-    flexShrink: 0
+    flexShrink: 0,
+    boxShadow: '0 4px 15px rgba(255, 138, 0, 0.3)'
+  },
+  icon: {
+    fontSize: '26px'
   },
   info: {
     flexGrow: 1
   },
   title: {
     color: '#ffffff',
-    fontSize: '15px',
+    fontSize: '17px',
     fontWeight: 700,
-    margin: '0 0 4px 0'
+    margin: '0 0 6px 0',
+    lineHeight: '1.2'
   },
   desc: {
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: '12px',
-    margin: 0
-  },
-  arrow: {
-    color: 'rgba(255, 255, 255, 0.4)',
-    fontSize: '22px'
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '13px',
+    margin: 0,
+    lineHeight: '1.4'
   }
 };
