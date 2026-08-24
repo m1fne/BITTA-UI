@@ -1,7 +1,11 @@
 "use client";
 import React from 'react';
 
-// Список сервисов-кубиков (как приложения на смартфоне)
+export interface TopSectionProps {
+  // Функция-обработчик клика из родительского page.tsx
+  onSelectService?: (serviceId: string) => void;
+}
+
 const APPS = [
   { id: 'pubg', title: 'PUBG UC', icon: '🎮', bg: 'linear-gradient(135deg, #FF512F 0%, #DD2476 100%)', badge: 'HOT' },
   { id: 'tg', title: 'TG Premium', icon: '⭐', bg: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)', badge: 'SALE' },
@@ -11,35 +15,59 @@ const APPS = [
   { id: 'ai', title: 'Bitta AI', icon: '🤖', bg: 'linear-gradient(135deg, #654ea3 0%, #eaafc8 100%)', badge: 'PRO' },
 ];
 
-export default function TopSection() {
-  return (
-    <div style={styles.board}>
-      {/* Шапка доски */}
-      <div style={styles.header}>
-        <div>
-          <h2 style={styles.title}>⚡ Tezkor xizmatlar</h2>
-          <p style={styles.subtitle}>Eng ko'p ishlatiladigan bo'limlar</p>
-        </div>
-        <div style={styles.liveBadge}>● TOP 6</div>
-      </div>
+export default function TopSection({ onSelectService }: TopSectionProps) {
 
-      {/* Сетка кубиков (Grid 3x2) */}
-      <div style={styles.grid}>
-        {APPS.map((app) => (
-          <div 
-            key={app.id} 
-            style={styles.appCard} 
-            onClick={() => console.log('Open:', app.title)}
-          >
-            <div style={{ ...styles.iconBox, background: app.bg }}>
-              <span style={styles.icon}>{app.icon}</span>
-              {app.badge && <span style={styles.appBadge}>{app.badge}</span>}
-            </div>
-            <span style={styles.appTitle}>{app.title}</span>
+  const handleClick = (id: string) => {
+    // Если в page.tsx передали обработчик — вызываем его
+    if (onSelectService) {
+      onSelectService(id);
+    } else {
+      console.log('Clicked service:', id);
+    }
+  };
+
+  return (
+    <>
+      {/* Стили для анимации нажатия (Scale effect) */}
+      <style jsx global>{`
+        .app-tile {
+          transition: transform 0.15s cubic-bezier(0.2, 0, 0.1, 1), background 0.2s ease !important;
+          -webkit-tap-highlight-color: transparent;
+          user-select: none;
+        }
+        .app-tile:active {
+          transform: scale(0.91) !important;
+          opacity: 0.85;
+        }
+      `}</style>
+
+      <div style={styles.board}>
+        <div style={styles.header}>
+          <div>
+            <h2 style={styles.title}>⚡ Tezkor xizmatlar</h2>
+            <p style={styles.subtitle}>Eng ko'p ishlatiladigan bo'limlar</p>
           </div>
-        ))}
+          <div style={styles.liveBadge}>● TOP 6</div>
+        </div>
+
+        <div style={styles.grid}>
+          {APPS.map((app) => (
+            <div 
+              key={app.id} 
+              className="app-tile"
+              style={styles.appCard} 
+              onClick={() => handleClick(app.id)}
+            >
+              <div style={{ ...styles.iconBox, background: app.bg }}>
+                <span style={styles.icon}>{app.icon}</span>
+                {app.badge && <span style={styles.appBadge}>{app.badge}</span>}
+              </div>
+              <span style={styles.appTitle}>{app.title}</span>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -83,7 +111,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)', // 3 кубика в ряд
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '12px',
   },
   appCard: {
@@ -95,13 +123,12 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '20px',
     padding: '12px 8px',
     cursor: 'pointer',
-    transition: 'transform 0.15s ease, background 0.15s ease',
   },
   iconBox: {
     position: 'relative',
     width: '52px',
     height: '52px',
-    borderRadius: '16px', // Форма иконки приложения iOS
+    borderRadius: '16px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
