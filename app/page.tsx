@@ -905,6 +905,22 @@ export default function Home() {
                     </div>
                     <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                   </button>
+                  <button 
+                    style={styles.categoryCard} 
+                    className="bt-tile"
+                    onClick={() => console.log('Boshqa xizmatlar clicked')}
+                  >
+                    <div style={{ ...styles.categoryIconBadge, background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)' }}>
+                      <span style={{ fontSize: '20px' }}>🧩</span>
+                    </div>
+                    <span style={styles.categoryTextWrap}>
+                      <span style={styles.categoryTitle}>Boshqa xizmatlar</span>
+                      <span style={styles.categorySub}>Barcha qo'shimcha bo'limlar</span>
+                    </span>
+                    <span style={styles.arrowRight}>
+                      <Icons.ChevronRight />
+                    </span>
+                  </button>
                 </div>
 
                 {/* РЕКЛАМА */}
@@ -1020,21 +1036,6 @@ export default function Home() {
                 <span style={styles.categorySub}>Bo'sh vakansiyalar</span>
               </div>
               <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-            <button 
-              style={styles.bigTile} 
-              onClick={() => console.log('Boshqa xizmatlar clicked')}
-            >
-              <div style={{ ...styles.bigTileIconBadge, background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)' }}>
-                <span style={{ fontSize: '20px' }}>🧩</span>
-              </div>
-              <span style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>Boshqa xizmatlar</span>
-                <span style={styles.categorySub}>Barcha qo'shimcha bo'limlar</span>
-              </span>
-              <span style={styles.arrowRight}>
-                <Icons.ChevronRight />
-              </span>
             </button>
 
             <button style={styles.bigTile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("worker"); setIsVacancyOpen(true); }}>
