@@ -937,12 +937,17 @@ export default function Home() {
           </>
         )}
 
-        {/* ===================== O'YIN & MARKET ===================== */}
+    {/* ===================== O'YIN & MARKET ===================== */}
         {activeView === "market" && (
           <div style={styles.bigTileList}>
+            {/* PUBG Mobile — с твоим новым логотипом */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
-              <div style={{ ...styles.bigTileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
-                <Icons.Gamepad />
+              <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
+                <img 
+                  src="/pubg_mobile.jpg" 
+                  alt="PUBG Mobile" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
+                />
               </div>
               <div style={styles.categoryTextWrap}>
                 <span style={styles.categoryTitle}>PUBG Mobile</span>
@@ -951,6 +956,7 @@ export default function Home() {
               <span style={styles.arrowRight}><Icons.ChevronRight /></span>
             </button>
 
+            {/* Free Fire */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("freefire")}>
               <div style={{ ...styles.bigTileIconBadge, background: themes.gold.grad, boxShadow: `0 8px 18px ${themes.gold.glow}` }}>
                 <Icons.Diamond />
@@ -962,6 +968,7 @@ export default function Home() {
               <span style={styles.arrowRight}><Icons.ChevronRight /></span>
             </button>
 
+            {/* TG Premium */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("premium")}>
               <div style={{ ...styles.bigTileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
                 <Icons.Premium />
@@ -973,6 +980,7 @@ export default function Home() {
               <span style={styles.arrowRight}><Icons.ChevronRight /></span>
             </button>
 
+            {/* Steam */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("steam")}>
               <div style={{ ...styles.bigTileIconBadge, background: themes.blue.grad, boxShadow: `0 8px 18px ${themes.blue.glow}` }}>
                 <Icons.Steam />
@@ -985,7 +993,6 @@ export default function Home() {
             </button>
           </div>
         )}
-
         {/* ===================== O'QISH VA IMTIHONLAR ===================== */}
         {activeView === "study" && (
           <div style={styles.rowList}>
