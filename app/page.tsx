@@ -1023,7 +1023,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* ===================== ISHGA VAKANSIYA ===================== */}
+{/* ===================== ISHGA VAKANSIYA ===================== */}
         {activeView === "jobs" && (
           <div style={styles.bigTileList}>
             <button style={styles.bigTile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); }}>
@@ -1048,6 +1048,31 @@ export default function Home() {
               <span style={styles.arrowRight}><Icons.ChevronRight /></span>
             </button>
           </div>
+        )}
+
+        {/* ===================== BOSHQA XIZMATLAR ===================== */}
+        {activeView === "boshqa" && (
+          <div style={styles.bigTileList}>
+            <button 
+              style={styles.bigTile} 
+              className="bt-tile" 
+              onClick={() => { haptic("light"); setActiveView("snake"); }}
+            >
+              <div style={{ ...styles.bigTileIconBadge, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}>
+                <span style={{ fontSize: '20px' }}>🐍</span>
+              </div>
+              <div style={styles.categoryTextWrap}>
+                <span style={styles.categoryTitle}>Snake O'yini</span>
+                <span style={styles.categorySub}>Vaqt o'tkazish uchun mini-o'yin</span>
+              </div>
+              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+            </button>
+          </div>
+        )}
+
+        {/* ===================== SNAKE GAME ===================== */}
+        {activeView === "snake" && (
+          <SnakeGame onBack={() => setActiveView("boshqa")} />
         )}
 
         {/* ===================== PROFIL ===================== */}
