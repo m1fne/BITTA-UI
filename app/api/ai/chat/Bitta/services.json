@@ -1,0 +1,26 @@
+[
+  {
+    "name": "📌 ISHGA VAKANCIYA",
+    "link": "https://t.me/your_jobs_bot",
+    "desc": "Kerakli bo'limni tanlang: Ish topish yoki Ishchi qidirish.",
+    "sub_buttons": [
+      "🔍 Ish topish",
+      "🤝 Ishchi qidirish"
+    ]
+  },
+  {
+    "name": "🎬 Bitta Downloader",
+    "link": "https://t.me/your_downloader_bot",
+    "desc": "TikTok, YouTube va Instagram'dan videolarni yuklab beruvchi bot."
+  },
+  {
+    "name": "🎮 Geymerlar uchun",
+    "link": "https://t.me/your_uc_service_bot",
+    "desc": "PUBG va Free Fire o'yinlari uchun valyuta xizmati (UC / Diamonds)."
+  },
+  {
+    "name": "📈 Treyding / AI (II)",
+    "link": "https://t.me/your_trading_bot",
+    "desc": "Sun'iy intellekt yordamida bozor tahlili va treyding signallari."
+  }
+]

@@ -907,8 +907,7 @@ export default function Home() {
                   </button>
                   <button 
                     style={styles.categoryCard} 
-                    className="bt-tile"
-                    onClick={() => console.log('Boshqa xizmatlar clicked')}
+                    onClick={() => { haptic("light"); setActiveView("boshqa"); }}
                   >
                     <div style={{ ...styles.categoryIconBadge, background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)' }}>
                       <span style={{ fontSize: '20px' }}>🧩</span>
