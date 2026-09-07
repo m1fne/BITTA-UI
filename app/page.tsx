@@ -1,5 +1,6 @@
 "use client";
 import TopSection from './TopSection';
+import SnakeGame from './SnakeGame';
 
 import { useState, useEffect, ChangeEvent } from "react";
 
@@ -1070,9 +1071,17 @@ export default function Home() {
           </div>
         )}
 
-        {/* ===================== SNAKE GAME ===================== */}
+{/* ===================== SNAKE GAME ===================== */}
         {activeView === "snake" && (
-          <SnakeGame onBack={() => setActiveView("boshqa")} />
+          <div style={{ padding: '20px', textAlign: 'center', color: '#fff' }}>
+            <h3 style={{ marginBottom: '12px' }}>🐍 Змейка скоро появится!</h3>
+            <button 
+              onClick={() => setActiveView("boshqa")}
+              style={{ padding: '8px 16px', borderRadius: '8px', background: '#27272a', color: '#fff', border: 'none', cursor: 'pointer' }}
+            >
+              ← Orqaga
+            </button>
+          </div>
         )}
 
         {/* ===================== PROFIL ===================== */}
