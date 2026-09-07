@@ -1073,15 +1073,7 @@ export default function Home() {
 
 {/* ===================== SNAKE GAME ===================== */}
         {activeView === "snake" && (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#fff' }}>
-            <h3 style={{ marginBottom: '12px' }}>🐍 Змейка скоро появится!</h3>
-            <button 
-              onClick={() => setActiveView("boshqa")}
-              style={{ padding: '8px 16px', borderRadius: '8px', background: '#27272a', color: '#fff', border: 'none', cursor: 'pointer' }}
-            >
-              ← Orqaga
-            </button>
-          </div>
+          <SnakeGame onBack={() => setActiveView("boshqa")} />
         )}
 
         {/* ===================== PROFIL ===================== */}
