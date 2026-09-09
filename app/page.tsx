@@ -875,8 +875,12 @@ export default function Home() {
                   <TopSection />
 
                   <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("market"); }}>
-                    <div style={{ ...styles.categoryIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
-                      <Icons.Gamepad />
+                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
+                      <img 
+                        src="/games_home.jpg" 
+                        alt="O'yin & Market" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
+                      />
                     </div>
                     <div style={styles.categoryTextWrap}>
                       <span style={styles.categoryTitle}>O'yin & Market</span>
