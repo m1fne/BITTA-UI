@@ -937,10 +937,10 @@ export default function Home() {
           </>
         )}
 
-    {/* ===================== O'YIN & MARKET ===================== */}
+   {/* ===================== O'YIN & MARKET ===================== */}
         {activeView === "market" && (
           <div style={styles.bigTileList}>
-            {/* PUBG Mobile — с твоим новым логотипом */}
+            {/* PUBG Mobile */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
               <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
                 <img 
@@ -958,8 +958,12 @@ export default function Home() {
 
             {/* Free Fire */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("freefire")}>
-              <div style={{ ...styles.bigTileIconBadge, background: themes.gold.grad, boxShadow: `0 8px 18px ${themes.gold.glow}` }}>
-                <Icons.Diamond />
+              <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
+                <img 
+                  src="/ff_diamonds.jpg" 
+                  alt="Free Fire" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
+                />
               </div>
               <div style={styles.categoryTextWrap}>
                 <span style={styles.categoryTitle}>Free Fire</span>
@@ -970,8 +974,12 @@ export default function Home() {
 
             {/* TG Premium */}
             <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("premium")}>
-              <div style={{ ...styles.bigTileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
-                <Icons.Premium />
+              <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
+                <img 
+                  src="/telegram_premium.jpg" 
+                  alt="TG Premium" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
+                />
               </div>
               <div style={styles.categoryTextWrap}>
                 <span style={styles.categoryTitle}>TG Premium</span>
