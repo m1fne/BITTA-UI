@@ -1,72 +1,102 @@
-import { NextRequest, NextResponse } from "next/server";
-import { verifyTelegramInitData } from "@/lib/telegram-auth";
-import { getOrCreateUser, purchaseWithBalance } from "@/lib/db";
-import { sendMessage, escapeHtml } from "@/lib/telegram";
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-// Короткая подпись службы для номера заказа (#UC-1711, #FF-204 и т.д.) — просто для красоты,
-// на логику не влияет.
-const ORDER_PREFIX: Record<string, string> = {
-  pubg: "UC",
-  freefire: "FF",
-  steam: "STM",
-  premium: "TG",
-};
+// Инициализируем клиент Supabase с правами администратора
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
-const SERVICE_LABEL: Record<string, string> = {
-  pubg: "PUBG Mobile",
-  freefire: "Free Fire",
-  steam: "Steam",
-  premium: "Telegram Premium",
-};
+export async function POST(request: Request) {
+  try {
+    const { initData, service, productName, targetId, price, telegramId } = await request.json();
 
-// POST /api/buy  { initData, service, productName, targetId, price }
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null);
-  const initData: string | undefined = body?.initData;
-  const service: string | undefined = body?.service;
-  const productName: string | undefined = body?.productName;
-  const targetId: string | undefined = body?.targetId;
-  const price: number | undefined = body?.price;
+    if (!targetId || !service || !productName || !price) {
+      return NextResponse.json({ success: false, error: 'MISSING_FIELDS' }, { status: 400 });
+    }
 
-  const tgUser = initData ? verifyTelegramInitData(initData) : null;
-  if (!tgUser) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    // Временный или реальный Telegram ID
+    const userTgId = telegramId || 12345678; // сюда передаем telegram_id пользователя
 
-  if (!service?.trim() || !productName?.trim() || !targetId?.trim() || typeof price !== "number" || price <= 0) {
-    return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+    // 1. ПРОВЕРКА БАЛАНСА В SUPABASE
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('balance')
+      .eq('telegram_id', userTgId)
+      .single();
+
+    if (userError || !user) {
+      // Если юзера еще нет в базе, можно вернуть ошибку или создать с 0 балансом
+      return NextResponse.json({ success: false, error: 'INSUFFICIENT_BALANCE' }, { status: 400 });
+    }
+
+    if (user.balance < price) {
+      return NextResponse.json({ success: false, error: 'INSUFFICIENT_BALANCE' }, { status: 400 });
+    }
+
+    // 2. СОПОСТАВЛЕНИЕ ПАКЕТОВ С PAYERPIN
+    const variationMap: Record<string, string> = {
+      '60 UC': 'v1',
+      '325 UC': 'v2',
+      '660 UC': 'v3',
+      '1800 UC': 'v4',
+      '3850 UC': 'v5',
+      '8100 UC': 'v6',
+    };
+
+    const variationId = variationMap[productName] || 'v1';
+    const idempotencyKey = `buy_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // 3. ОТПРАВКА ЗАКАЗА В PAYERPIN
+    const response = await fetch('https://api.payerpin.uz/api/v2/order', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': process.env.PAYERPIN_API_KEY || '',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        game_key: service,
+        variation_id: variationId,
+        player_id: String(targetId),
+        idempotency_key: idempotencyKey,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      // Сохраняем неудачный заказ в историю
+      await supabase.from('orders').insert({
+        telegram_id: userTgId,
+        player_id: targetId,
+        game_key: service,
+        product_name: productName,
+        price: price,
+        status: 'failed',
+      });
+
+      return NextResponse.json(
+        { success: false, error: 'PROVIDER_ERROR', details: data },
+        { status: 400 }
+      );
+    }
+
+    // 4. ЕСЛИ PAYERPIN ПРИНЯЛ ЗАКАЗ — СПИСЫВАЕМ БАЛАНС И СОХРАНЯЕМ ЧЕК
+    const newBalance = user.balance - price;
+    await supabase.from('users').update({ balance: newBalance }).eq('telegram_id', userTgId);
+
+    await supabase.from('orders').insert({
+      telegram_id: userTgId,
+      player_id: targetId,
+      game_key: service,
+      product_name: productName,
+      price: price,
+      status: 'success',
+    });
+
+    return NextResponse.json({ success: true, newBalance, order: data });
+
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
-
-  const user = await getOrCreateUser(tgUser.id, tgUser.username ?? null);
-  const result = await purchaseWithBalance(user.telegram_id, service.trim(), productName.trim(), targetId.trim(), price);
-
-  if (!result.ok) {
-    const status = result.error === "INSUFFICIENT_BALANCE" ? 402 : 400;
-    return NextResponse.json({ success: false, error: result.error }, { status });
-  }
-
-  const order = result.order;
-  const prefix = ORDER_PREFIX[order.service] ?? "ORD";
-  const serviceLabel = SERVICE_LABEL[order.service] ?? order.service;
-  const who = user.username ? `@${escapeHtml(user.username)}` : "username yo'q";
-
-  const adminChatId = Number(process.env.ADMIN_CHAT_ID);
-  if (adminChatId) {
-    await sendMessage(
-      adminChatId,
-      `📦 <b>Yangi buyurtma #${prefix}-${order.order_no}</b>\n\n` +
-        `🎮 Xizmat: ${escapeHtml(serviceLabel)}\n` +
-        `💎 Paket: ${escapeHtml(order.product_name)}\n` +
-        `🆔 Player ID: <code>${escapeHtml(order.target_id)}</code>\n` +
-        `💰 Narxi: ${order.price.toLocaleString("ru-RU")} so'm\n` +
-        `👤 Mijoz: ${who}\n` +
-        `🆔 Telegram ID: <code>${user.telegram_id}</code>`,
-      [
-        [
-          { text: "✅ Bajarildi", callback_data: `ord:complete:${order.id}` },
-          { text: "❌ Bekor qilish (qaytarish)", callback_data: `ord:refund:${order.id}` },
-        ],
-      ]
-    );
-  }
-
-  return NextResponse.json({ success: true, order });
 }

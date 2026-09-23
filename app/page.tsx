@@ -1,5 +1,6 @@
 "use client";
 import TopSection from './TopSection';
+import TangaGame from "./tanga";
 import SnakeGame from './SnakeGame';
 
 import { useState, useEffect, ChangeEvent } from "react";
@@ -33,7 +34,7 @@ declare global {
   }
 }
 
-type ShopType = "pubg" | "freefire" | "steam" | "premium";
+type ShopType = "pubg" | "freefire" | "premium" | "mlbb";
 type EduType = "cefr" | "prava";
 
 // ===================== ДАННЫЕ =====================
@@ -57,40 +58,54 @@ const shopProducts: Record<
     title: "PUBG Mobile UC",
     placeholder: "Player ID (masalan: 5123456789)",
     packs: [
-      { name: "60 UC", price: "12,000 UZS" },
-      { name: "325 UC", price: "60,000 UZS" },
+      { name: "60 UC", price: "13,000 UZS" },
+      { name: "325 UC", price: "58,000 UZS" },
       { name: "660 UC", price: "115,000 UZS" },
-      { name: "1800 UC", price: "310,000 UZS" },
+      { name: "1800 UC", price: "285,000 UZS" },
+      { name: "3850 UC", price: "560,000 UZS" },
+      { name: "8100 UC", price: "1,130,000 UZS" },
     ],
   },
   freefire: {
     title: "Free Fire Almazlar",
     placeholder: "Player ID (masalan: 78291044)",
     packs: [
-      { name: "100 + 10 Almaz", price: "15,000 UZS" },
-      { name: "310 + 31 Almaz", price: "42,000 UZS" },
-      { name: "520 + 52 Almaz", price: "68,000 UZS" },
-      { name: "1060 + 106 Almaz", price: "135,000 UZS" },
+      { name: "100 Almaz", price: "14,000 UZS" },
+      { name: "210 Almaz", price: "26,000 UZS" },
+      { name: "310 Almaz", price: "39,000 UZS" },
+      { name: "530 Almaz", price: "62,000 UZS" },
+      { name: "1080 Almaz", price: "125,000 UZS" },
     ],
   },
-  steam: {
-    title: "Steam Balans",
-    placeholder: "Steam Login (masalan: musa_pro)",
+mlbb: {
+    title: "Mobile Legends",
+    placeholder: "User ID va Zone ID kiriting (masalan: 12345678 1234)",
     packs: [
-      { name: "$5 USD", price: "70,000 UZS" },
-      { name: "$10 USD", price: "140,000 UZS" },
-      { name: "$20 USD", price: "275,000 UZS" },
+      { name: "14 Diamonds", price: "6 000 so'm" },
+      { name: "42 Diamonds", price: "12 500 so'm" },
+      { name: "165 Diamonds", price: "43 000 so'm" },
+      { name: "275 Diamonds", price: "71 000 so'm"},
+      { name: "565 Diamonds", price: "145 000 so'm" },
+      { name: "Weekly elite pack", price: "16 000 so'm" },
+      { name: "Monthly elite pack", price: "77 000 so'm" },
     ],
   },
   premium: {
     title: "Telegram Premium",
     placeholder: "Telegram Username (masalan: @username)",
     packs: [
-      { name: "3 Oy (Muddatsiz)", price: "90,000 UZS" },
-      { name: "6 Oy (Muddatsiz)", price: "150,000 UZS" },
-      { name: "12 Oy (Muddatsiz)", price: "270,000 UZS" },
+      { name: "3 Oy ", price: "195,000 UZS" },
+      { name: "6 Oy ", price: "255,000 UZS" },
+      { name: "12 Oy ", price: "450,000 UZS" },
     ],
   },
+};
+
+const shopImages: Record<string, string> = {
+  pubg: "/pubgmobileuc.png",
+  freefire: "/ffdiamonds.png",
+  telegram: "/telegram_premium.png",
+  mlbb: "/mlbbdiamonds.png",
 };
 
 // ===================== ИКОНКИ =====================
@@ -112,11 +127,7 @@ const Icons = {
       <polygon points="12 2 22 8.5 17 22 7 22 2 8.5 12 2" />
     </svg>
   ),
-  Steam: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><path d="M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2zM7 16a3 3 0 1 1 3-3v1a2 2 0 1 0 4 0V9a1 1 0 1 1 2 0v5a3 3 0 0 1-6 0z" />
-    </svg>
-  ),
+
   Book: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5V4.5z" />
@@ -257,16 +268,22 @@ const themes = {
 const shopTheme: Record<ShopType, typeof themes.pink> = {
   pubg: themes.pink,
   freefire: themes.gold,
-  steam: themes.blue,
   premium: themes.violet,
+  mlbb: themes.teal, // Добавили тему для Mobile Legends
 };
 
 // Иконки для заголовков модалок (вместо emoji)
 const shopIcons: Record<ShopType, () => JSX.Element> = {
   pubg: Icons.Gamepad,
   freefire: Icons.Diamond,
-  steam: Icons.Steam,
   premium: Icons.Premium,
+  mlbb: () => (
+    <img 
+      src="/mobile_legends.jpg" 
+      alt="MLBB" 
+      style={{ width: "20px", height: "20px", borderRadius: "4px", objectFit: "cover" }} 
+    />
+  ),
 };
 
 const eduIcons: Record<EduType, () => JSX.Element> = {
@@ -370,18 +387,23 @@ export default function Home() {
     };
   };
 
-  const loadBalance = async () => {
+const loadBalance = async () => {
     const initData = getInitData();
     if (!initData) return;
     try {
       const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}`);
       const data = await res.json();
-      if (res.ok && typeof data.balance === "number") setUserBalance(data.balance);
-    } catch {
-      // тихо игнорируем — попробуем при следующем действии
+      
+      if (res.ok && typeof data.balance === "number") {
+        setUserBalance(data.balance);
+      } else {
+        // Показывает точную причину прямо в приложении
+        console.log("ОБРАБОТКА БАЛАНСА:", res.status, data);
+      }
+    } catch (err) {
+      console.error("Ошибка сети баланса:", err);
     }
   };
-
   // Пока заявка на пополнение "на рассмотрении" — спрашиваем сервер, не решил ли админ.
   useEffect(() => {
     if (topUpStatus !== "pending" || !depositId) return;
@@ -673,7 +695,7 @@ export default function Home() {
   const searchCatalog = [
     { id: "g-pubg", group: "O'yin", theme: themes.pink, icon: Icons.Gamepad, title: "PUBG Mobile UC", desc: "UC hisobingizga to'ldiring", keywords: ["pubg", "uc", "oyin", "mobile"], action: () => handleOpenShop("pubg") },
     { id: "g-ff", group: "O'yin", theme: themes.gold, icon: Icons.Diamond, title: "Free Fire Almazlar", desc: "Almaz to'ldirish", keywords: ["free fire", "ff", "almaz", "diamond"], action: () => handleOpenShop("freefire") },
-    { id: "g-steam", group: "O'yin", theme: themes.blue, icon: Icons.Steam, title: "Steam Balans", desc: "Hamyoningizga pul qo'shing", keywords: ["steam", "balans", "wallet"], action: () => handleOpenShop("steam") },
+   
     { id: "g-prem", group: "Xizmat", theme: themes.violet, icon: Icons.Premium, title: "Telegram Premium", desc: "Tezkor obuna", keywords: ["premium", "telegram", "tg"], action: () => handleOpenShop("premium") },
     { id: "e-ielts", group: "Ta'lim", theme: themes.teal, icon: Icons.Book, title: "IELTS.GG", desc: "IELTS imtihoniga tayyorgarlik", keywords: ["ielts", "ingliz", "til"], action: () => openLinkInside("https://ielts.gg") },
     { id: "e-cefr", group: "Ta'lim", theme: themes.teal, icon: Icons.Book, title: "CEFR Imtihonlari", desc: "Milliy sertifikat materiallari", keywords: ["cefr", "sertifikat"], action: () => handleOpenEdu("cefr") },
@@ -872,26 +894,30 @@ export default function Home() {
                 <div style={styles.categoryList}>
 
                   {/* 🚀 НАШ НОВЫЙ ТОП БЛОК */}
-                  <TopSection />
+                 <TopSection onSelect={() => handleOpenShop("pubg")} />
 
                   <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("market"); }}>
                     <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
                       <img 
-                        src="/games_home.jpg" 
+                        src="/games_home.png" 
                         alt="O'yin & Market" 
                         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
                       />
                     </div>
                     <div style={styles.categoryTextWrap}>
                       <span style={styles.categoryTitle}>O'yin & Market</span>
-                      <span style={styles.categorySub}>PUBG, Free Fire, Steam, TG Premium</span>
+                      <span style={styles.categorySub}>PUBG, Free Fire, TG Premium</span>
                     </div>
                     <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                   </button>
 
                   <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("study"); }}>
-                    <div style={{ ...styles.categoryIconBadge, background: themes.teal.grad, boxShadow: `0 8px 18px ${themes.teal.glow}` }}>
-                      <Icons.Book />
+                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
+                      <img 
+                        src="/oqish.png" 
+                        alt="O'qish va Imtihonlar" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
                     </div>
                     <div style={styles.categoryTextWrap}>
                       <span style={styles.categoryTitle}>O'qish va Imtihonlar</span>
@@ -901,8 +927,12 @@ export default function Home() {
                   </button>
 
                   <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("jobs"); }}>
-                    <div style={{ ...styles.categoryIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
-                      <Icons.Briefcase />
+                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
+                      <img 
+                        src="/vakanisiya.png" 
+                        alt="Ishga Vakansiya" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
                     </div>
                     <div style={styles.categoryTextWrap}>
                       <span style={styles.categoryTitle}>Ishga Vakansiya</span>
@@ -912,10 +942,15 @@ export default function Home() {
                   </button>
                   <button 
                     style={styles.categoryCard} 
+                    className="bt-tile"
                     onClick={() => { haptic("light"); setActiveView("boshqa"); }}
                   >
-                    <div style={{ ...styles.categoryIconBadge, background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)' }}>
-                      <span style={{ fontSize: '20px' }}>🧩</span>
+                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
+                      <img 
+                        src="/boshqa_xizmatlar.png" 
+                        alt="Boshqa xizmatlar" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
                     </div>
                     <span style={styles.categoryTextWrap}>
                       <span style={styles.categoryTitle}>Boshqa xizmatlar</span>
@@ -941,70 +976,120 @@ export default function Home() {
           </>
         )}
 
-   {/* ===================== O'YIN & MARKET ===================== */}
-        {activeView === "market" && (
-          <div style={styles.bigTileList}>
-            {/* PUBG Mobile */}
-            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("pubg")}>
-              <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
-                <img 
-                  src="/pubg_mobile.jpg" 
-                  alt="PUBG Mobile" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
-                />
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>PUBG Mobile</span>
-                <span style={styles.categorySub}>UC to'ldirish</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
+{/* ===================== O'YIN & MARKET ===================== */}
+{activeView === "market" && (
+  <div style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '10px',
+    padding: '8px 0'
+  }}>
+    {/* PUBG Mobile */}
+    <button 
+      className="bt-tile" 
+      onClick={() => handleOpenShop("pubg")}
+      style={{
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        textAlign: 'center'
+      }}
+    >
+      <img 
+        src="/pubg_mobile.jpg" 
+        alt="PUBG Mobile" 
+        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
+      />
+      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>PUBG Mobile</span>
+      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>UC to'ldirish</span>
+    </button>
 
-            {/* Free Fire */}
-            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("freefire")}>
-              <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
-                <img 
-                  src="/ff_diamonds.jpg" 
-                  alt="Free Fire" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
-                />
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>Free Fire</span>
-                <span style={styles.categorySub}>Almazlar</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
+    {/* Free Fire */}
+    <button 
+      className="bt-tile" 
+      onClick={() => handleOpenShop("freefire")}
+      style={{
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        textAlign: 'center'
+      }}
+    >
+      <img 
+        src="/ff_diamonds.jpg" 
+        alt="Free Fire" 
+        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
+      />
+      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>Free Fire</span>
+      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Almazlar</span>
+    </button>
 
-            {/* TG Premium */}
-            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("premium")}>
-              <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
-                <img 
-                  src="/telegram_premium.jpg" 
-                  alt="TG Premium" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
-                />
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>TG Premium</span>
-                <span style={styles.categorySub}>Tezkor obuna</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
+{/* TG Premium */}
+    <button 
+      className="bt-tile" 
+      onClick={() => handleOpenShop("premium")}
+      style={{
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        textAlign: 'center'
+      }}
+    >
+      <img 
+        src="/telegram_premium.jpg" 
+        alt="TG Premium" 
+        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
+      />
+      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>TG Premium</span>
+      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Tezkor obuna</span>
+    </button>
 
-            {/* Steam */}
-            <button style={styles.bigTile} className="bt-tile" onClick={() => handleOpenShop("steam")}>
-              <div style={{ ...styles.bigTileIconBadge, background: themes.blue.grad, boxShadow: `0 8px 18px ${themes.blue.glow}` }}>
-                <Icons.Steam />
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>Steam</span>
-                <span style={styles.categorySub}>Hamyon balansi</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-          </div>
-        )}
+    {/* Mobile Legends — Перенесли ВНУТРЬ контейнера */}
+    <button 
+      className="bt-tile" 
+      onClick={() => handleOpenShop("mlbb")}
+      style={{
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        textAlign: 'center'
+      }}
+    >
+      <img 
+        src="/mobile_legends.jpg" 
+        alt="Mobile Legends" 
+        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
+      />
+      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>Mobile Legends</span>
+      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Almazlar</span>
+    </button>
+
+  </div>
+)}
         {/* ===================== O'QISH VA IMTIHONLAR ===================== */}
         {activeView === "study" && (
           <div style={styles.rowList}>
@@ -1070,30 +1155,52 @@ export default function Home() {
           </div>
         )}
 
-        {/* ===================== BOSHQA XIZMATLAR ===================== */}
-        {activeView === "boshqa" && (
-          <div style={styles.bigTileList}>
-            <button 
-              style={styles.bigTile} 
-              className="bt-tile" 
-              onClick={() => { haptic("light"); setActiveView("snake"); }}
-            >
-              <div style={{ ...styles.bigTileIconBadge, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}>
-                <span style={{ fontSize: '20px' }}>🐍</span>
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>Snake O'yini</span>
-                <span style={styles.categorySub}>Vaqt o'tkazish uchun mini-o'yin</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-          </div>
-        )}
+{/* ===================== BOSHQA XIZMATLAR ===================== */}
+{activeView === "boshqa" && (
+  <div style={styles.bigTileList}>
+    {/* КАРТОЧКА TANGA CLICKER */}
+    <button 
+      style={styles.bigTile} 
+      className="bt-tile" 
+      onClick={() => { haptic("light"); setActiveView("tanga"); }}
+    >
+      <div style={{ ...styles.bigTileIconBadge, background: 'rgba(255, 184, 0, 0.15)', overflow: 'hidden' }}>
+        <img src="/tanga.png" alt="Tanga Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+      </div>
+      <div style={styles.categoryTextWrap}>
+        <span style={styles.categoryTitle}>Tanga Clicker</span>
+        <span style={styles.categorySub}>Tanga bosing va sovrinlar yuting</span>
+      </div>
+      <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+    </button>
 
-{/* ===================== SNAKE GAME ===================== */}
-        {activeView === "snake" && (
-          <SnakeGame onBack={() => setActiveView("boshqa")} />
-        )}
+    {/* КАРТОЧКА SNAKE O'YINI */}
+    <button 
+      style={styles.bigTile} 
+      className="bt-tile" 
+      onClick={() => { haptic("light"); setActiveView("snake"); }}
+    >
+      <div style={{ ...styles.bigTileIconBadge, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}>
+        <span style={{ fontSize: '20px' }}>🐍</span>
+      </div>
+      <div style={styles.categoryTextWrap}>
+        <span style={styles.categoryTitle}>Snake O'yini</span>
+        <span style={styles.categorySub}>Vaqt o'tkazish uchun mini-o'yin</span>
+      </div>
+      <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+    </button>
+  </div>
+)}
+
+{/* ===================== ЭКРАН SNAKE ===================== */}
+{activeView === "snake" && (
+  <SnakeGame onBack={() => setActiveView("boshqa")} />
+)}
+
+{/* ===================== ЭКРАН TANGA ===================== */}
+{activeView === "tanga" && (
+  <TangaGame onBack={() => setActiveView("boshqa")} />
+)}
 
         {/* ===================== PROFIL ===================== */}
         {activeView === "profile" && (
@@ -1162,12 +1269,12 @@ export default function Home() {
                     Plastik kartamizga to'lovni amalga oshiring:
                   </p>
                   <div style={styles.cardBox}>
-                    <span style={styles.cardNumber}>8600 4910 2345 6789</span>
+                    <span style={styles.cardNumber}>9860 1966 1961 4445</span>
                     <button
                       style={styles.copyBtn}
                       className="bt-copy-btn"
                       onClick={() => {
-                        navigator.clipboard.writeText("8600491023456789");
+                        navigator.clipboard.writeText("9860196619614445");
                         haptic("light");
                         setTopUpCopied(true);
                         setTimeout(() => setTopUpCopied(false), 1500);
@@ -1176,7 +1283,7 @@ export default function Home() {
                       {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
                     </button>
                   </div>
-                  <div style={styles.cardHolder}>Karta egasi: MUSA A.</div>
+                  <div style={styles.cardHolder}>Karta egasi: MUSA X.</div>
                 </div>
 
                 {/* ВВОД СУММЫ */}
@@ -1281,88 +1388,126 @@ export default function Home() {
         </>
       )}
 
-      {/* ===================== МОДАЛЬНОЕ ОКНО: МАГАЗИН ===================== */}
-      {isShopOpen && activeShopType && (
-        <>
-          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsShopOpen(false)} />
-          <div style={styles.bottomSheet} className="bt-sheet">
-            <div style={styles.sheetIndicator}></div>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>
-                {(() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()} {shopProducts[activeShopType].title}
-              </div>
-              {shopStep !== 4 && (
-                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}><Icons.Close /></button>
+{/* ===================== МОДАЛЬНОЕ ОКНО: МАГАЗИН ===================== */}
+{isShopOpen && activeShopType && (
+  <>
+    <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsShopOpen(false)} />
+    <div style={styles.bottomSheet} className="bt-sheet">
+      <div style={styles.sheetIndicator}></div>
+      <div style={styles.modalHeader}>
+        <div style={styles.modalLogo}>
+          {(() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()} {shopProducts[activeShopType].title}
+        </div>
+        {shopStep !== 4 && (
+          <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}>
+            <Icons.Close />
+          </button>
+        )}
+      </div>
+
+      {/* ШАГ 1: ВЫБОР ТАРИФА */}
+      {shopStep === 1 && (
+        <div style={styles.sheetBody}>
+          <p style={styles.subLabel}>Tarifni tanlang</p>
+          <div style={styles.packGrid}>
+            {shopProducts[activeShopType].packs.map((pack: any, idx: number) => {
+              // Авто-выбор картинки: либо личная иконка пака, либо иконка всей игры из shopImages
+              const packIcon = pack.icon || shopImages[activeShopType];
+
+              return (
+                <button
+                  key={idx}
+                  style={{
+                    ...styles.packCard,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px'
+                  }}
+                  className="bt-pack-card"
+                  onClick={() => handleSelectPack(pack)}
+                >
+                  {/* Текст (Название и Цена) слева */}
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={styles.packName}>{pack.name}</div>
+                    <div style={styles.packPrice}>{pack.price}</div>
+                  </div>
+
+                  {/* Картинка подставляется автоматически! */}
+                  {packIcon && (
+                    <img
+                      src={packIcon}
+                      alt="icon"
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        objectFit: 'contain',
+                        flexShrink: 0
+                      }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ШАГ 2: ВВОД PLAYER ID И ОПЛАТА */}
+      {shopStep === 2 && selectedPack && (
+        <div style={styles.sheetBody}>
+          <div style={styles.orderSummary}>
+            Siz tanladingiz: <span style={{ color: "#fff", fontWeight: 700 }}>{selectedPack.name}</span> ({selectedPack.price})
+          </div>
+          <input
+            type="text"
+            placeholder={shopProducts[activeShopType].placeholder}
+            value={userCredential}
+            onChange={(e) => setUserCredential(e.target.value)}
+            style={styles.input}
+            className="bt-search-input"
+          />
+          {buyError && (
+            <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <span>{buyError}</span>
+              {buyError === "Balansingiz yetarli emas." && (
+                <button
+                  style={{ ...styles.btnPrimary, background: "linear-gradient(135deg,#B98BFF,#6E6BFF)" }}
+                  className="bt-primary-btn"
+                  onClick={() => { setIsShopOpen(false); handleOpenTopUp(); }}
+                >
+                  <Icons.Wallet /> Hisobni to'ldirish
+                </button>
               )}
             </div>
-
-            {shopStep === 1 && (
-              <div style={styles.sheetBody}>
-                <p style={styles.subLabel}>Tarifni tanlang</p>
-                <div style={styles.packGrid}>
-                  {shopProducts[activeShopType].packs.map((pack, idx) => (
-                    <button key={idx} style={styles.packCard} className="bt-pack-card" onClick={() => handleSelectPack(pack)}>
-                      <div style={styles.packName}>{pack.name}</div>
-                      <div style={styles.packPrice}>{pack.price}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {shopStep === 2 && selectedPack && (
-              <div style={styles.sheetBody}>
-                <div style={styles.orderSummary}>
-                  Siz tanladingiz: <span style={{ color: "#fff", fontWeight: 700 }}>{selectedPack.name}</span> ({selectedPack.price})
-                </div>
-                <input
-                  type="text"
-                  placeholder={shopProducts[activeShopType].placeholder}
-                  value={userCredential}
-                  onChange={(e) => setUserCredential(e.target.value)}
-                  style={styles.input}
-                  className="bt-search-input"
-                />
-                {buyError && (
-                  <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <span>{buyError}</span>
-                    {buyError === "Balansingiz yetarli emas." && (
-                      <button
-                        style={{ ...styles.btnPrimary, background: "linear-gradient(135deg,#B98BFF,#6E6BFF)" }}
-                        className="bt-primary-btn"
-                        onClick={() => { setIsShopOpen(false); handleOpenTopUp(); }}
-                      >
-                        <Icons.Wallet /> Hisobni to'ldirish
-                      </button>
-                    )}
-                  </div>
-                )}
-                <div style={styles.btnRow}>
-                  <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setShopStep(1)}>Orqaga</button>
-                  <button
-                    style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, opacity: isBuying ? 0.7 : 1 }}
-                    className="bt-primary-btn"
-                    onClick={handleBuy}
-                    disabled={isBuying}
-                  >
-                    {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {shopStep === 4 && (
-              <div style={styles.successBox}>
-                <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
-                  <Icons.Check />
-                </div>
-                <div style={styles.successTitle}>Buyurtma qabul qilindi!</div>
-                <div style={styles.successSub}>Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.</div>
-              </div>
-            )}
+          )}
+          <div style={styles.btnRow}>
+            <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setShopStep(1)}>Orqaga</button>
+            <button
+              style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, opacity: isBuying ? 0.7 : 1 }}
+              className="bt-primary-btn"
+              onClick={handleBuy}
+              disabled={isBuying}
+            >
+              {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
+            </button>
           </div>
-        </>
+        </div>
       )}
+
+      {/* ШАГ 4: УСПЕШНЫЙ ЗАКАЗ */}
+      {shopStep === 4 && (
+        <div style={styles.successBox}>
+          <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
+            <Icons.Check />
+          </div>
+          <div style={styles.successTitle}>Buyurtma qabul qilindi!</div>
+          <div style={styles.successSub}>Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.</div>
+        </div>
+      )}
+    </div>
+  </>
+)}
 
       {/* ===================== МОДАЛЬНОЕ ОКНО: ОБУЧЕНИЕ ===================== */}
       {isEduOpen && eduType && (

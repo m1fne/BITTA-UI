@@ -1,194 +1,148 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Service Role Key — только на сервере, обходит RLS. Никогда не должен
-// попадать во фронтенд (и тем более в переменную с префиксом NEXT_PUBLIC_).
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = 
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  process.env.SUPABASE_URL || 
+  "https://placeholder.supabase.co";
 
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
+const supabaseKey = 
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 
+  "placeholder-key";
 
-export interface User {
-  telegram_id: number;
-  username: string | null;
-  balance: number;
-  created_at: string;
-}
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
-export interface Deposit {
-  id: string;
-  user_id: number;
-  amount: number;
-  status: "pending" | "approved" | "rejected";
-  created_at: string;
-}
-
-export async function getOrCreateUser(telegramId: number, username?: string | null): Promise<User> {
-  const { data: existing, error: findErr } = await supabase
+export async function getOrCreateUser(telegramId: number, username?: string | null) {
+  const tgId = Number(telegramId);
+  const { data: user } = await supabase
     .from("users")
     .select("*")
-    .eq("telegram_id", telegramId)
-    .maybeSingle();
+    .eq("telegram_id", tgId)
+    .single();
 
-  if (findErr) throw findErr;
-  if (existing) return existing as User;
+  if (user) return user;
 
-  const { data: created, error: insErr } = await supabase
+  const { data: newUser, error } = await supabase
     .from("users")
-    .insert({ telegram_id: telegramId, username: username ?? null })
+    .insert([{ telegram_id: tgId, username }])
     .select()
     .single();
 
-  if (insErr) throw insErr;
-  return created as User;
-}
-
-export async function getBalance(telegramId: number): Promise<number> {
-  const { data, error } = await supabase.from("users").select("balance").eq("telegram_id", telegramId).single();
   if (error) throw error;
-  return Number(data.balance);
+  return newUser;
 }
 
-export async function createDeposit(userId: number, amount: number): Promise<Deposit> {
+export async function getBalance(telegramId: number) {
+  const tgId = Number(telegramId);
   const { data, error } = await supabase
-    .from("deposits")
-    .insert({ user_id: userId, amount, status: "pending" })
-    .select()
+    .from("users")
+    .select("balance")
+    .eq("telegram_id", tgId)
     .single();
-  if (error) throw error;
-  return data as Deposit;
-}
-
-export async function getDeposit(id: string): Promise<Deposit | null> {
-  const { data, error } = await supabase.from("deposits").select("*").eq("id", id).single();
-  if (error) return null;
-  return data as Deposit;
-}
-
-export async function approveDeposit(depositId: string): Promise<void> {
-  const { error } = await supabase.rpc("approve_deposit", { p_deposit_id: depositId });
-  if (error) throw error;
-}
-
-export async function rejectDeposit(depositId: string): Promise<void> {
-  const { error } = await supabase.rpc("reject_deposit", { p_deposit_id: depositId });
-  if (error) throw error;
-}// ===== Добавить в конец существующего lib/db.ts =====
-
-export interface Order {
-  id: string;
-  order_no: number;
-  user_id: number;
-  service: string;
-  product_name: string;
-  target_id: string;
-  price: number;
-  status: "processing" | "completed" | "refunded";
-  created_at: string;
-}
-
-export type PurchaseResult =
-  | { ok: true; order: Order }
-  | { ok: false; error: "INSUFFICIENT_BALANCE" | "USER_NOT_FOUND" | "UNKNOWN" };
-
-// Проверка баланса и списание — одной атомарной транзакцией в БД (purchase_with_balance),
-// поэтому здесь не нужно вручную проверять баланс заранее.
-export async function purchaseWithBalance(
-  userId: number,
-  service: string,
-  productName: string,
-  targetId: string,
-  price: number
-): Promise<PurchaseResult> {
-  const { data, error } = await supabase.rpc("purchase_with_balance", {
-    p_user_id: userId,
-    p_service: service,
-    p_product_name: productName,
-    p_target_id: targetId,
-    p_price: price,
-  });
 
   if (error) {
-    if (error.message.includes("INSUFFICIENT_BALANCE")) return { ok: false, error: "INSUFFICIENT_BALANCE" };
-    if (error.message.includes("USER_NOT_FOUND")) return { ok: false, error: "USER_NOT_FOUND" };
-    return { ok: false, error: "UNKNOWN" };
+    console.error("❌ Ошибка getBalance:", error);
+    return 0;
   }
 
-  return { ok: true, order: data as Order };
+  return Number(data?.balance ?? 0);
 }
 
-export async function getOrder(id: string): Promise<Order | null> {
-  const { data, error } = await supabase.from("orders").select("*").eq("id", id).single();
-  if (error) return null;
-  return data as Order;
-}
+export async function createDeposit(telegramId: number, amount: number) {
+  const tgId = Number(telegramId);
+  
+  // Гарантируем, что пользователь создан перед подачей заявки
+  await getOrCreateUser(tgId);
 
-export async function completeOrder(orderId: string): Promise<void> {
-  const { error } = await supabase.rpc("complete_order", { p_order_id: orderId });
-  if (error) throw error;
-}
-
-export async function refundOrder(orderId: string): Promise<void> {
-  const { error } = await supabase.rpc("refund_order", { p_order_id: orderId });
-  if (error) throw error;
-}// ===== Добавить в конец существующего lib/db.ts =====
-
-export interface Vacancy {
-  id: string;
-  user_id: number;
-  type: "job" | "worker";
-  title: string;
-  budget: string;
-  description: string;
-  contact: string;
-  status: "active" | "archived";
-  created_at: string;
-}
-
-export async function createVacancy(input: {
-  userId: number;
-  type: "job" | "worker";
-  title: string;
-  budget: string;
-  description: string;
-  contact: string;
-}): Promise<Vacancy> {
   const { data, error } = await supabase
-    .from("vacancies")
-    .insert({
-      user_id: input.userId,
-      type: input.type,
-      title: input.title,
-      budget: input.budget,
-      description: input.description,
-      contact: input.contact,
-    })
+    .from("deposits")
+    .insert([{ user_id: tgId, amount: Number(amount), status: "pending" }])
     .select()
     .single();
+
   if (error) throw error;
-  return data as Vacancy;
+  return data;
 }
 
-export async function listVacancies(type: "job" | "worker", limit = 30): Promise<Vacancy[]> {
-  const { data, error } = await supabase
-    .from("vacancies")
-    .select("*")
-    .eq("type", type)
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []) as Vacancy[];
+export async function getDeposit(id: string) {
+  const { data } = await supabase.from("deposits").select("*").eq("id", id).single();
+  return data;
 }
 
-export async function getVacancy(id: string): Promise<Vacancy | null> {
-  const { data, error } = await supabase.from("vacancies").select("*").eq("id", id).single();
-  if (error) return null;
-  return data as Vacancy;
+export async function approveDeposit(id: string) {
+  const deposit = await getDeposit(id);
+  if (!deposit || deposit.status !== "pending") throw new Error("ALREADY_DECIDED");
+
+  const tgId = Number(deposit.user_id);
+
+  // 1. Гарантируем наличие пользователя в таблице users
+  const user = await getOrCreateUser(tgId);
+
+  // 2. Рассчитываем и обновляем баланс
+  const currentBalance = Number(user?.balance ?? 0);
+  const newBalance = currentBalance + Number(deposit.amount);
+
+  // 3. Переводим статус депозита в approved
+  await supabase.from("deposits").update({ status: "approved" }).eq("id", id);
+
+  // 4. Записываем новый баланс и проверяем, что запись действительно изменилась
+  const { data: updatedUsers, error: updateError } = await supabase
+    .from("users")
+    .update({ balance: newBalance })
+    .eq("telegram_id", tgId)
+    .select();
+
+  if (updateError) {
+    console.error("❌ Ошибка при обновлении баланса в approveDeposit:", updateError);
+    throw updateError;
+  }
+
+  if (!updatedUsers || updatedUsers.length === 0) {
+    console.error(`❌ Ошибка: пользователь с telegram_id=${tgId} не был обновлен`);
+    throw new Error("USER_BALANCE_UPDATE_FAILED");
+  }
 }
 
-export async function archiveVacancy(id: string): Promise<void> {
-  const { error } = await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
-  if (error) throw error;
+export async function rejectDeposit(id: string) {
+  const deposit = await getDeposit(id);
+  if (!deposit || deposit.status !== "pending") throw new Error("ALREADY_DECIDED");
+
+  await supabase.from("deposits").update({ status: "rejected" }).eq("id", id);
+}
+
+export async function getOrder(id: string) {
+  const { data } = await supabase.from("orders").select("*").eq("id", id).single();
+  return data;
+}
+
+export async function completeOrder(id: string) {
+  const order = await getOrder(id);
+  if (!order || order.status !== "pending") throw new Error("ALREADY_DECIDED");
+  await supabase.from("orders").update({ status: "completed" }).eq("id", id);
+}
+
+export async function refundOrder(id: string) {
+  const order = await getOrder(id);
+  if (!order || order.status !== "pending") throw new Error("ALREADY_DECIDED");
+
+  const tgId = Number(order.user_id);
+  const user = await getOrCreateUser(tgId);
+
+  await supabase.from("orders").update({ status: "refunded" }).eq("id", id);
+
+  const currentBalance = Number(user?.balance ?? 0);
+  const newBalance = currentBalance + Number(order.price);
+
+  await supabase
+    .from("users")
+    .update({ balance: newBalance })
+    .eq("telegram_id", tgId);
+}
+
+export async function getVacancy(id: string) {
+  const { data } = await supabase.from("vacancies").select("*").eq("id", id).single();
+  return data;
+}
+
+export async function archiveVacancy(id: string) {
+  await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
 }

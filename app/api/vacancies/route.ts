@@ -24,18 +24,24 @@ export async function POST(req: NextRequest) {
   const contact: string | undefined = body?.contact;
 
   // Временно: debugVerifyTelegramInitData вместо verifyTelegramInitData — чтобы увидеть
-  // ТОЧНУЮ причину отказа (reason), а не просто "не прошло". Убрать после отладки.
+  // ТОЧНУЮ причину отказа (reason), а не просто "не просто не прошло". Убрать после отладки.
   const { user: tgUser, reason } = debugVerifyTelegramInitData(initData ?? "");
   if (!tgUser) return NextResponse.json({ error: "UNAUTHORIZED", reason }, { status: 401 });
 
-  if ((type !== "job" && type !== "worker") || !title?.trim() || !budget?.trim() || !description?.trim() || !contact?.trim()) {
+  if (
+    (type !== "job" && type !== "worker") ||
+    !title?.trim() ||
+    !budget?.trim() ||
+    !description?.trim() ||
+    !contact?.trim()
+  ) {
     return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
   const user = await getOrCreateUser(tgUser.id, tgUser.username ?? null);
   const vacancy = await createVacancy({
     userId: user.telegram_id,
-    type,
+    type: type as "job" | "worker",
     title: title.trim(),
     budget: budget.trim(),
     description: description.trim(),
@@ -44,13 +50,15 @@ export async function POST(req: NextRequest) {
 
   const adminChatId = Number(process.env.ADMIN_CHAT_ID);
   if (adminChatId) {
+    const text = `📋 <b>Yangi e'lon</b> (${type === "job" ? "Ish taklifi" : "Ish qidiruvi"})\n\n` +
+      `📝 ${escapeHtml(vacancy.title)}\n` +
+      `💰 ${escapeHtml(vacancy.budget)}\n` +
+      `${escapeHtml(vacancy.description)}\n\n` +
+      `📞 ${escapeHtml(vacancy.contact)}`;
+
     await sendMessage(
       adminChatId,
-      `📋 <b>Yangi e'lon</b> (${type === "job" ? "Ish taklifi" : "Ish qidiruvi"})\n\n` +
-        `📝 ${escapeHtml(vacancy.title)}\n` +
-        `💰 ${escapeHtml(vacancy.budget)}\n` +
-        `${escapeHtml(vacancy.description)}\n\n` +
-        `📞 ${escapeHtml(vacancy.contact)}`,
+      text,
       [[{ text: "🗑 O'chirish", callback_data: `vac:archive:${vacancy.id}` }]]
     );
   }

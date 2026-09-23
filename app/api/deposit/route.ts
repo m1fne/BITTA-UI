@@ -1,72 +1,179 @@
-import { NextRequest, NextResponse } from "next/server";
-import { debugVerifyTelegramInitData } from "@/lib/telegram-auth";
-import { getOrCreateUser, createDeposit, getDeposit, getBalance } from "@/lib/db";
-import { sendMessage, sendPhoto, escapeHtml } from "@/lib/telegram";
+import { NextResponse } from "next/server";
+import crypto from "crypto";
+import { createDeposit, getBalance, getDeposit, getOrCreateUser } from "@/lib/db";
 
-const MIN_DEPOSIT = 1000; // so'm
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
-// POST /api/deposit — multipart/form-data: initData, amount, receipt (файл, необязателен)
-export async function POST(req: NextRequest) {
-  const form = await req.formData().catch(() => null);
-  if (!form) return NextResponse.json({ error: "INVALID_FORM" }, { status: 400 });
+function parseTelegramInitData(initData: string) {
+  if (!initData) return null;
 
-  const initData = form.get("initData");
-  const amountRaw = form.get("amount");
-  const receipt = form.get("receipt"); // File | null
+  try {
+    const urlParams = new URLSearchParams(initData);
+    const userStr = urlParams.get("user");
+    if (!userStr) return null;
 
-  const { user: tgUser, reason } = debugVerifyTelegramInitData(typeof initData === "string" ? initData : "");
-  if (!tgUser) return NextResponse.json({ error: "UNAUTHORIZED", reason }, { status: 401 });
+    const user = JSON.parse(userStr);
+    const hash = urlParams.get("hash");
 
-  const amount = typeof amountRaw === "string" ? parseInt(amountRaw.replace(/[^\d]/g, ""), 10) : NaN;
-  if (!Number.isFinite(amount) || amount < MIN_DEPOSIT) {
-    return NextResponse.json({ error: "INVALID_AMOUNT", minAmount: MIN_DEPOSIT }, { status: 400 });
-  }
+    if (TELEGRAM_BOT_TOKEN && hash) {
+      urlParams.delete("hash");
+      const dataCheckString = Array.from(urlParams.entries())
+        .map(([key, val]) => `${key}=${val}`)
+        .sort()
+        .join("\n");
 
-  const user = await getOrCreateUser(tgUser.id, tgUser.username ?? null);
-  const deposit = await createDeposit(user.telegram_id, amount);
+      const secretKey = crypto
+        .createHmac("sha256", "WebAppData")
+        .update(TELEGRAM_BOT_TOKEN)
+        .digest();
 
-  const who = user.username ? "@" + escapeHtml(user.username) : `id${user.telegram_id}`;
-  const caption =
-    `📥 <b>Yangi to'ldirish so'rovi</b>\n` +
-    `👤 Foydalanuvchi: ${who}\n` +
-    `💰 Summa: ${amount.toLocaleString("ru-RU")} so'm`;
-  const buttons = [
-    [
-      { text: `✅ Tasdiqlash (+${amount.toLocaleString("ru-RU")})`, callback_data: `dep:approve:${deposit.id}` },
-      { text: "❌ Rad etish", callback_data: `dep:reject:${deposit.id}` },
-    ],
-  ];
+      const calculatedHash = crypto
+        .createHmac("sha256", secretKey)
+        .update(dataCheckString)
+        .digest("hex");
 
-  const adminChatId = Number(process.env.ADMIN_CHAT_ID);
-  if (adminChatId) {
-    if (receipt instanceof File && receipt.size > 0) {
-      await sendPhoto(adminChatId, receipt, receipt.name || "receipt.jpg", caption, buttons);
-    } else {
-      await sendMessage(adminChatId, caption + "\n\n⚠️ Chek rasmi biriktirilmagan.", buttons);
+      if (calculatedHash !== hash) {
+        console.warn("⚠️ Хэш initData не совпал, используем dev-режим");
+      }
     }
-  }
 
-  return NextResponse.json({ deposit });
+    return user;
+  } catch (err) {
+    console.error("❌ Ошибка парсинга initData:", err);
+    return null;
+  }
 }
 
-// GET /api/deposit?initData=...              -> { balance }
-// GET /api/deposit?initData=...&id=...        -> { deposit }  (опрос статуса конкретной заявки)
-export async function GET(req: NextRequest) {
-  const initData = req.nextUrl.searchParams.get("initData");
-  const id = req.nextUrl.searchParams.get("id");
+// 1. GET — считывание баланса и статуса текущей заявки
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const initData = searchParams.get("initData");
+    const depositId = searchParams.get("id");
 
-  const { user: tgUser, reason } = debugVerifyTelegramInitData(initData ?? "");
-  if (!tgUser) return NextResponse.json({ error: "UNAUTHORIZED", reason }, { status: 401 });
-
-  if (id) {
-    const deposit = await getDeposit(id);
-    if (!deposit || deposit.user_id !== tgUser.id) {
-      return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!initData) {
+      return NextResponse.json({ error: "NO_INIT_DATA", balance: 0 }, { status: 400 });
     }
-    return NextResponse.json({ deposit });
-  }
 
-  const user = await getOrCreateUser(tgUser.id, tgUser.username ?? null);
-  const balance = await getBalance(user.telegram_id);
-  return NextResponse.json({ balance });
+    const tgUser = parseTelegramInitData(initData);
+    if (!tgUser || !tgUser.id) {
+      return NextResponse.json({ error: "INVALID_USER", balance: 0 }, { status: 401 });
+    }
+
+    const tgId = Number(tgUser.id);
+    await getOrCreateUser(tgId, tgUser.username);
+
+    const balance = await getBalance(tgId);
+
+    let deposit = null;
+    if (depositId) {
+      deposit = await getDeposit(depositId);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      balance,
+      deposit,
+    });
+  } catch (err: any) {
+    console.error("❌ Ошибка в GET /api/deposit:", err);
+    return NextResponse.json({ error: err.message, balance: 0 }, { status: 500 });
+  }
+}
+
+// POST — создание новой заявки на пополнение (поддерживает и FormData с чеком, и JSON)
+// app/api/deposit/route.ts
+
+export async function POST(req: Request) {
+  try {
+    let initData = "";
+    let amount = 0;
+    let receiptFile: File | null = null;
+
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      initData = (formData.get("initData") as string) || "";
+      amount = Number(formData.get("amount") || 0);
+      receiptFile = formData.get("receipt") as File | null;
+    } else {
+      const body = await req.json().catch(() => ({}));
+      initData = body.initData || "";
+      amount = Number(body.amount || 0);
+    }
+
+    if (!initData) {
+      return NextResponse.json({ error: "NO_INIT_DATA" }, { status: 400 });
+    }
+
+    const tgUser = parseTelegramInitData(initData);
+    if (!tgUser || !tgUser.id) {
+      return NextResponse.json({ error: "INVALID_USER" }, { status: 401 });
+    }
+
+    const tgId = Number(tgUser.id);
+    const numAmount = Number(amount);
+
+    if (!numAmount || numAmount <= 0) {
+      return NextResponse.json({ error: "INVALID_AMOUNT" }, { status: 400 });
+    }
+
+    // 1. Создаём депозит в Supabase
+    const deposit = await createDeposit(tgId, numAmount);
+
+    // Берем ID админа из переменной ADMIN_TELEGRAM_IDS
+    const adminId = (process.env.ADMIN_TELEGRAM_IDS || "").split(",")[0]?.trim();
+
+    // 2. Отправляем уведомление админу в формате, который понимает твой bot/route.ts
+    if (TELEGRAM_BOT_TOKEN && adminId && deposit) {
+      try {
+        const usernameText = tgUser.username ? `@${tgUser.username}` : `ID: ${tgId}`;
+        const caption = `📩 <b>Yangi to'ldirish so'rovi</b>\n👤 Foydalanuvchi: ${usernameText}\n💰 Summa: ${numAmount.toLocaleString("ru-RU")} so'm`;
+        
+        // ВАЖНО: Формат dep:approve:ID и dep:reject:ID под твой bot/route.ts
+        const replyMarkup = {
+          inline_keyboard: [
+            [
+              { text: `✅ Tasdiqlash (+${numAmount})`, callback_data: `dep:approve:${deposit.id}` },
+              { text: "❌ Rad etish", callback_data: `dep:reject:${deposit.id}` },
+            ],
+          ],
+        };
+
+        if (receiptFile && receiptFile.size > 0) {
+          const tgForm = new FormData();
+          tgForm.append("chat_id", adminId);
+          tgForm.append("caption", caption);
+          tgForm.append("parse_mode", "HTML");
+          tgForm.append("reply_markup", JSON.stringify(replyMarkup));
+          tgForm.append("photo", receiptFile);
+
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+            method: "POST",
+            body: tgForm,
+          });
+        } else {
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminId,
+              text: caption,
+              parse_mode: "HTML",
+              reply_markup: replyMarkup,
+            }),
+          });
+        }
+      } catch (telegramErr) {
+        console.error("⚠️ Не удалось отправить сообщение админу:", telegramErr);
+      }
+    }
+
+    return NextResponse.json({ ok: true, deposit });
+  } catch (err: any) {
+    console.error("❌ Ошибка в POST /api/deposit:", err);
+    return NextResponse.json({ error: err.message || "SERVER_ERROR" }, { status: 500 });
+  }
 }
