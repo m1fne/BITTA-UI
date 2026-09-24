@@ -53,21 +53,43 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const playerId = body.targetId || body.playerId || body.player_id || body.username || body.userId || body.user_id;
+    const playerIdRaw = body.targetId || body.playerId || body.player_id || body.username || body.userId || body.user_id;
+    const playerId = String(playerIdRaw || '').trim();
+
+    if (!playerId) {
+      return NextResponse.json({ error: 'Укажите Player ID' }, { status: 400 });
+    }
+
     const service = body.service || '';
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
     const payerpinVariationId = getVariationId(service, productName, packageId);
+
+    if (!payerpinVariationId) {
+      return NextResponse.json(
+        { error: `Не удалось сопоставить товар (${service} / ${productName})` },
+        { status: 400 }
+      );
+    }
+
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
+    // Формируем полезную нагрузку со всеми возможными псевдонимами полей
     const payerpinPayload: Record<string, any> = {
       variation_id: payerpinVariationId,
-      player_id: String(playerId || '').trim(),
+      player_id: playerId,
+      target_id: playerId,
+      target: playerId,
+      account_id: playerId,
+      user_id: playerId,
+      quantity: 1,
+      custom_id: `order_${Date.now()}`,
     };
 
     if (serverId) {
       payerpinPayload.server_id = String(serverId).trim();
+      payerpinPayload.zone_id = String(serverId).trim();
     }
 
     const response = await fetch('https://api.payerpin.uz/api/v2/order', {
@@ -82,9 +104,10 @@ export async function POST(request: Request) {
     const data = await response.json();
 
     if (!response.ok) {
-      // Возвращаем ответа Payerpin целиком в виде строки
+      // Извлекаем детали ошибок, если Payerpin возвращает их внутри error.details или error.fields
+      const errDetails = data.error?.details || data.error?.fields || data.errors || data.error || data;
       return NextResponse.json(
-        { error: `Payerpin Error: ${JSON.stringify(data)} | Sent: ${JSON.stringify(payerpinPayload)}` },
+        { error: `Payerpin error: ${JSON.stringify(errDetails)}` },
         { status: response.status }
       );
     }
