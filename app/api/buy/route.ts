@@ -1,34 +1,5 @@
 import { NextResponse } from 'next/server';
 
-// Умный парсер ошибок Laravel / Payerpin
-function parsePayerpinError(data: any): string {
-  if (!data) return 'Неизвестная ошибка Payerpin';
-  if (typeof data === 'string') return data;
-
-  // Если Payerpin вернул объект errors с конкретными полями
-  if (data.errors && typeof data.errors === 'object' && Object.keys(data.errors).length > 0) {
-    const details = Object.entries(data.errors)
-      .map(([field, msgs]) => {
-        const msgStr = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
-        return `${field}: ${msgStr}`;
-      })
-      .join(' | ');
-    return `Ошибка валидации (${details})`;
-  }
-
-  // Если есть человеческое сообщение об ошибке
-  if (data.message && data.message !== 'Validation.required' && data.message !== 'The given data was invalid.') {
-    return data.message;
-  }
-
-  if (data.error) {
-    return typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-  }
-
-  return JSON.stringify(data);
-}
-
-// Определение variation_id по товару
 function getVariationId(serviceRaw: string, productNameRaw: string, packageIdRaw: string): string | null {
   const service = (serviceRaw || '').toLowerCase().trim();
   const product = (productNameRaw || packageIdRaw || '').toLowerCase().trim();
@@ -83,32 +54,16 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const playerId = body.targetId || body.playerId || body.player_id || body.username || body.userId || body.user_id;
-
-    if (!playerId) {
-      return NextResponse.json({ error: 'Укажите Player ID' }, { status: 400 });
-    }
-
     const service = body.service || '';
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
     const payerpinVariationId = getVariationId(service, productName, packageId);
-
-    if (!payerpinVariationId) {
-      return NextResponse.json(
-        { error: `Товар не найден (${service} / ${productName})` },
-        { status: 400 }
-      );
-    }
-
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
-    // Сборка запроса к Payerpin со всеми возможными требуемыми полями
     const payerpinPayload: Record<string, any> = {
       variation_id: payerpinVariationId,
-      player_id: String(playerId).trim(),
-      quantity: 1,
-      custom_id: `order_${Date.now()}`,
+      player_id: String(playerId || '').trim(),
     };
 
     if (serverId) {
@@ -127,12 +82,15 @@ export async function POST(request: Request) {
     const data = await response.json();
 
     if (!response.ok) {
-      const errorMsg = parsePayerpinError(data);
-      return NextResponse.json({ error: errorMsg }, { status: response.status });
+      // Возвращаем ответа Payerpin целиком в виде строки
+      return NextResponse.json(
+        { error: `Payerpin Error: ${JSON.stringify(data)} | Sent: ${JSON.stringify(payerpinPayload)}` },
+        { status: response.status }
+      );
     }
 
     return NextResponse.json({ success: true, order: data });
   } catch (error: any) {
-    return NextResponse.json({ error: parsePayerpinError(error.message) }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
