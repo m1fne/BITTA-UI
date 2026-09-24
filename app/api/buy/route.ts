@@ -39,14 +39,18 @@ const VARIATION_MAP: Record<string, string> = {
 
 export async function POST(request: Request) {
   try {
-    const { packageId, playerId, serverId } = await request.json();
+    const body = await request.json();
 
-    // Берем ID из карты или используем переданный напрямую
-    const payerpinVariationId = VARIATION_MAP[packageId] || packageId;
+    // Автоматически подхватываем любые варианты названий полей с фронтенда
+    const packageId = body.packageId || body.package_id || body.variation_id || body.id;
+    const playerId = body.playerId || body.player_id || body.username || body.userId || body.user_id;
+    const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
     if (!playerId) {
       return NextResponse.json({ error: 'Укажите Player ID или Username' }, { status: 400 });
     }
+
+    const payerpinVariationId = VARIATION_MAP[packageId] || packageId;
 
     if (!payerpinVariationId) {
       return NextResponse.json({ error: 'Неверный ID товара' }, { status: 400 });
@@ -61,8 +65,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         variation_id: payerpinVariationId,
-        player_id: playerId,
-        ...(serverId ? { server_id: serverId } : {}),
+        player_id: String(playerId),
+        ...(serverId ? { server_id: String(serverId) } : {}),
       }),
     });
 
