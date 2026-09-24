@@ -10,7 +10,7 @@ const VARIATION_MAP: Record<string, string> = {
   'pubg_3850': 'fzr_topup__pubg_mobile_auto__3850_uc',
   'pubg_8100': 'fzr_topup__pubg_mobile_auto__8100_uc',
 
-  // Free Fire Diamonds & Memberships
+  // Free Fire
   'ff_110': 'fzr_topup__free_fire_cis__110_diamonds',
   'ff_341': 'fzr_topup__free_fire_cis__341_diamonds',
   'ff_572': 'fzr_topup__free_fire_cis__572_diamonds',
@@ -20,7 +20,7 @@ const VARIATION_MAP: Record<string, string> = {
   'ff_weekly': 'fzr_topup__free_fire_cis__weekly_membership',
   'ff_monthly': 'fzr_topup__free_fire_cis__monthly_membership',
 
-  // Mobile Legends Diamonds & Pass
+  // Mobile Legends
   'mlbb_55': 'fzr_topup__mobile_legends_global__50_5_diamonds_first_top_up_bonus',
   'mlbb_165': 'fzr_topup__mobile_legends_global__150_15_diamonds_first_top_up_bonus',
   'mlbb_275': 'fzr_topup__mobile_legends_global__250_25_diamonds_first_top_up_bonus',
@@ -41,22 +41,45 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Автоматически подхватываем любые варианты названий полей с фронтенда
-    const packageId = body.packageId || body.package_id || body.variation_id || body.id;
-    const playerId = body.playerId || body.player_id || body.username || body.userId || body.user_id;
-    const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
+    // 1. Поиск packageId
+    let packageId = body.packageId || body.package_id || body.variation_id || body.id || body.item_id || body.pack;
+    
+    // 2. Поиск playerId по всем возможным именам полей
+    let playerId = body.playerId || body.player_id || body.username || body.userId || body.user_id || body.player || body.account || body.account_id || body.target || body.input;
+
+    // 3. Поиск serverId
+    let serverId = body.serverId || body.server_id || body.zoneId || body.zone_id || body.server || body.zone;
+
+    // Автоматический перебор: если playerId не найден, берем первое подходящее значение из тела запроса
+    if (!playerId) {
+      for (const [key, val] of Object.entries(body)) {
+        if (key !== 'packageId' && key !== 'package_id' && key !== 'id' && val) {
+          const strVal = String(val).trim();
+          if (strVal.length > 0) {
+            playerId = strVal;
+            break;
+          }
+        }
+      }
+    }
 
     if (!playerId) {
-      return NextResponse.json({ error: 'Укажите Player ID или Username' }, { status: 400 });
+      return NextResponse.json(
+        { error: `Не найден Player ID. Полученные данные: ${JSON.stringify(body)}` },
+        { status: 400 }
+      );
     }
 
     const payerpinVariationId = VARIATION_MAP[packageId] || packageId;
 
     if (!payerpinVariationId) {
-      return NextResponse.json({ error: 'Неверный ID товара' }, { status: 400 });
+      return NextResponse.json(
+        { error: `Неизвестный пакет (${packageId}). Полученные данные: ${JSON.stringify(body)}` },
+        { status: 400 }
+      );
     }
 
-    // Отправка заказа в Payerpin API
+    // Запрос к API Payerpin
     const response = await fetch('https://api.payerpin.uz/api/v2/order', {
       method: 'POST',
       headers: {
@@ -65,8 +88,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         variation_id: payerpinVariationId,
-        player_id: String(playerId),
-        ...(serverId ? { server_id: String(serverId) } : {}),
+        player_id: String(playerId).trim(),
+        ...(serverId ? { server_id: String(serverId).trim() } : {}),
       }),
     });
 
@@ -74,7 +97,7 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data.message || 'Ошибка при оформлении заказа в Payerpin' },
+        { error: data.message || data.error || 'Ошибка при вызове Payerpin API' },
         { status: response.status }
       );
     }
