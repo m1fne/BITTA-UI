@@ -589,12 +589,16 @@ const loadBalance = async () => {
           price: parseInt(selectedPack.price.replace(/[^\d]/g, ""), 10),
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setBuyError(data.error === "INSUFFICIENT_BALANCE" ? "Balansingiz yetarli emas." : "Xatolik yuz berdi. Qayta urinib ko'ring.");
-        haptic("medium");
-        return;
-      }
+const data: any = await res.json();
+
+if (!res.ok || !data.success) {
+  const details = data.details ? JSON.stringify(data.details) : "";
+  const errorMessage = `${data.error || "XATOLIK"}${details ? " - " + details : ""}`;
+  
+  setBuyError(errorMessage);
+  haptic("medium");
+  return;
+}
       haptic("success");
       setShopStep(4);
       loadBalance();

@@ -1,26 +1,34 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  try {
-    const response = await fetch('https://api.payerpin.uz/api/v2/catalog', {
-      headers: {
-        'X-API-Key': process.env.PAYERPIN_API_KEY || '',
-      },
-      // Кешируем список на 1 час (3600 сек), чтобы не спамить API
-      next: { revalidate: 3600 },
-    });
+  const apiKey = process.env.PAYERPIN_API_KEY || '';
+  const games = ['pubg', 'freefire', 'mlbb'];
+  const catalogData: Record<string, any> = {};
 
-    const body = await response.json();
-
-    if (!body.ok) {
-      return NextResponse.json(
-        { error: body.error?.code || 'Ошибка каталога' },
-        { status: 400 }
-      );
+  for (const game of games) {
+    try {
+      const res = await fetch(`https://api.payerpin.uz/api/v2/catalog/${game}`, {
+        headers: { 'X-API-Key': apiKey },
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      
+      if (data.ok && data.data) {
+        catalogData[game] = {
+          name: data.data.name,
+          variations: data.data.variations?.map((v: any) => ({
+            id: v.id || v.variation_id || v.key,
+            name: v.name || v.title,
+            price: v.price,
+          })) || data.data.variations,
+        };
+      } else {
+        catalogData[game] = data;
+      }
+    } catch (err: any) {
+      catalogData[game] = { error: err.message };
     }
-
-    return NextResponse.json({ success: true, data: body.data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json(catalogData);
 }
