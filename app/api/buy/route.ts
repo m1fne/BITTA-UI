@@ -1,23 +1,39 @@
 import { NextResponse } from 'next/server';
 
-// Функция безопасного превращения любой ошибки в читаемый текст
-function stringifyError(err: any): string {
-  if (!err) return 'Неизвестная ошибка';
-  if (typeof err === 'string') return err;
-  if (typeof err === 'object') {
-    if (err.message && typeof err.message === 'string') return err.message;
-    if (err.error && typeof err.error === 'string') return err.error;
-    return JSON.stringify(err);
+// Умный парсер ошибок Laravel / Payerpin
+function parsePayerpinError(data: any): string {
+  if (!data) return 'Неизвестная ошибка Payerpin';
+  if (typeof data === 'string') return data;
+
+  // Если Payerpin вернул объект errors с конкретными полями
+  if (data.errors && typeof data.errors === 'object' && Object.keys(data.errors).length > 0) {
+    const details = Object.entries(data.errors)
+      .map(([field, msgs]) => {
+        const msgStr = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
+        return `${field}: ${msgStr}`;
+      })
+      .join(' | ');
+    return `Ошибка валидации (${details})`;
   }
-  return String(err);
+
+  // Если есть человеческое сообщение об ошибке
+  if (data.message && data.message !== 'Validation.required' && data.message !== 'The given data was invalid.') {
+    return data.message;
+  }
+
+  if (data.error) {
+    return typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+  }
+
+  return JSON.stringify(data);
 }
 
-// Определение variation_id
+// Определение variation_id по товару
 function getVariationId(serviceRaw: string, productNameRaw: string, packageIdRaw: string): string | null {
   const service = (serviceRaw || '').toLowerCase().trim();
   const product = (productNameRaw || packageIdRaw || '').toLowerCase().trim();
 
-  // 1. PUBG MOBILE (проверяем от больших чисел к меньшим, чтобы 660 не совпало с 60)
+  // 1. PUBG MOBILE
   if (service.includes('pubg')) {
     if (product.includes('8100')) return 'fzr_topup__pubg_mobile_auto__8100_uc';
     if (product.includes('3850')) return 'fzr_topup__pubg_mobile_auto__3850_uc';
@@ -80,12 +96,24 @@ export async function POST(request: Request) {
 
     if (!payerpinVariationId) {
       return NextResponse.json(
-        { error: `Товар не найден в базе (${service} / ${productName})` },
+        { error: `Товар не найден (${service} / ${productName})` },
         { status: 400 }
       );
     }
 
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
+
+    // Сборка запроса к Payerpin со всеми возможными требуемыми полями
+    const payerpinPayload: Record<string, any> = {
+      variation_id: payerpinVariationId,
+      player_id: String(playerId).trim(),
+      quantity: 1,
+      custom_id: `order_${Date.now()}`,
+    };
+
+    if (serverId) {
+      payerpinPayload.server_id = String(serverId).trim();
+    }
 
     const response = await fetch('https://api.payerpin.uz/api/v2/order', {
       method: 'POST',
@@ -93,22 +121,18 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         'X-API-Key': process.env.PAYERPIN_API_KEY || '',
       },
-      body: JSON.stringify({
-        variation_id: payerpinVariationId,
-        player_id: String(playerId).trim(),
-        ...(serverId ? { server_id: String(serverId).trim() } : {}),
-      }),
+      body: JSON.stringify(payerpinPayload),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      const errorMsg = stringifyError(data.message || data.error || data);
+      const errorMsg = parsePayerpinError(data);
       return NextResponse.json({ error: errorMsg }, { status: response.status });
     }
 
     return NextResponse.json({ success: true, order: data });
   } catch (error: any) {
-    return NextResponse.json({ error: stringifyError(error.message) }, { status: 500 });
+    return NextResponse.json({ error: parsePayerpinError(error.message) }, { status: 500 });
   }
 }
