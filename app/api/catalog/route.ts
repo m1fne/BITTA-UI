@@ -15,24 +15,18 @@ export async function GET(request: Request) {
     const gameData = data.data || {};
     const rawVars = gameData.variations || gameData.items || (Array.isArray(gameData) ? gameData : []);
 
-    // Оставляем только UC, убираем Pass и подписки
-    const ucPackages = Array.isArray(rawVars)
-      ? rawVars
-          .filter((v: any) => {
-            const name = (v.name || v.title || v.label || '').toLowerCase();
-            return name.includes('uc') && !name.includes('pass') && !name.includes('prime');
-          })
-          .map((v: any) => ({
-            variation_id: v.id ?? v.variation_id ?? v.key,
-            name: v.name ?? v.title ?? v.label,
-            price: v.price ?? v.amount,
-          }))
+    const packages = Array.isArray(rawVars)
+      ? rawVars.map((v: any) => ({
+          variation_id: v.id ?? v.variation_id ?? v.key,
+          name: v.name ?? v.title ?? v.label,
+          price: v.price ?? v.amount,
+        }))
       : [];
 
     return NextResponse.json({
       game: gameKey,
-      total_uc_packs: ucPackages.length,
-      packages: ucPackages,
+      total_packs: packages.length,
+      packages: packages,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
