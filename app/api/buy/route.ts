@@ -1,115 +1,82 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from 'next/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+// Карта соответствия внутренних ID магазина и variation_id от Payerpin
+const VARIATION_MAP: Record<string, string> = {
+  // PUBG Mobile UC
+  'pubg_60': 'fzr_topup__pubg_mobile_auto__60_uc',
+  'pubg_325': 'fzr_topup__pubg_mobile_auto__325_uc',
+  'pubg_660': 'fzr_topup__pubg_mobile_auto__660_uc',
+  'pubg_1800': 'fzr_topup__pubg_mobile_auto__1800_uc',
+  'pubg_3850': 'fzr_topup__pubg_mobile_auto__3850_uc',
+  'pubg_8100': 'fzr_topup__pubg_mobile_auto__8100_uc',
 
-function getTelegramUser(initData?: string) {
-  if (!initData) return null;
-  try {
-    const urlParams = new URLSearchParams(initData);
-    const userStr = urlParams.get("user");
-    if (!userStr) return null;
-    return JSON.parse(userStr);
-  } catch {
-    return null;
-  }
-}
+  // Free Fire Diamonds & Memberships
+  'ff_110': 'fzr_topup__free_fire_cis__110_diamonds',
+  'ff_341': 'fzr_topup__free_fire_cis__341_diamonds',
+  'ff_572': 'fzr_topup__free_fire_cis__572_diamonds',
+  'ff_1166': 'fzr_topup__free_fire_cis__1166_diamonds',
+  'ff_2398': 'fzr_topup__free_fire_cis__2398_diamonds',
+  'ff_6160': 'fzr_topup__free_fire_cis__6160_diamonds',
+  'ff_weekly': 'fzr_topup__free_fire_cis__weekly_membership',
+  'ff_monthly': 'fzr_topup__free_fire_cis__monthly_membership',
+
+  // Mobile Legends Diamonds & Pass
+  'mlbb_55': 'fzr_topup__mobile_legends_global__50_5_diamonds_first_top_up_bonus',
+  'mlbb_165': 'fzr_topup__mobile_legends_global__150_15_diamonds_first_top_up_bonus',
+  'mlbb_275': 'fzr_topup__mobile_legends_global__250_25_diamonds_first_top_up_bonus',
+  'mlbb_565': 'fzr_topup__mobile_legends_global__500_65_diamonds_first_top_up_bonus',
+  'mlbb_86': 'fzr_topup__mobile_legends_global__78_8_diamonds',
+  'mlbb_172': 'fzr_topup__mobile_legends_global__156_16_diamonds',
+  'mlbb_257': 'fzr_topup__mobile_legends_global__234_23_diamonds',
+  'mlbb_706': 'fzr_topup__mobile_legends_global__625_81_diamonds',
+  'mlbb_weekly': 'fzr_topup__mobile_legends_global__weekly_pass',
+
+  // Telegram Premium
+  'tg_3': 'premium_3',
+  'tg_6': 'premium_6',
+  'tg_12': 'premium_12',
+};
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { initData, service, productName, targetId, price } = body;
+    const { packageId, playerId, serverId } = await request.json();
 
-    if (!targetId || !service || !productName || price === undefined) {
-      return NextResponse.json({ success: false, error: "MISSING_FIELDS" }, { status: 400 });
+    // Берем ID из карты или используем переданный напрямую
+    const payerpinVariationId = VARIATION_MAP[packageId] || packageId;
+
+    if (!playerId) {
+      return NextResponse.json({ error: 'Укажите Player ID или Username' }, { status: 400 });
     }
 
-    // 1. Извлекаем Telegram ID из initData
-    const tgUser = getTelegramUser(initData);
-    if (!tgUser || !tgUser.id) {
-      return NextResponse.json({ success: false, error: "NO_TELEGRAM_ID" }, { status: 400 });
+    if (!payerpinVariationId) {
+      return NextResponse.json({ error: 'Неверный ID товара' }, { status: 400 });
     }
 
-    const tgId = Number(tgUser.id);
-    const numericPrice = Number(price);
-
-    // 2. Вызываем атомарную функцию Supabase для проверки и списания баланса
-    const { data: order, error: rpcError } = await supabase.rpc("purchase_with_balance", {
-      p_user_id: tgId,
-      p_service: service,
-      p_product_name: productName,
-      p_target_id: String(targetId),
-      p_price: numericPrice,
+    // Отправка заказа в Payerpin API
+    const response = await fetch('https://api.payerpin.uz/api/v2/order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.PAYERPIN_API_KEY || '',
+      },
+      body: JSON.stringify({
+        variation_id: payerpinVariationId,
+        player_id: playerId,
+        ...(serverId ? { server_id: serverId } : {}),
+      }),
     });
 
-    if (rpcError) {
-      console.error("❌ Ошибка Supabase RPC:", rpcError);
-      
-      if (rpcError.message?.includes("INSUFFICIENT_BALANCE")) {
-        return NextResponse.json({ success: false, error: "INSUFFICIENT_BALANCE" }, { status: 400 });
-      }
-      if (rpcError.message?.includes("USER_NOT_FOUND")) {
-        return NextResponse.json({ success: false, error: "USER_NOT_FOUND" }, { status: 404 });
-      }
-      return NextResponse.json({ success: false, error: rpcError.message }, { status: 400 });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: data.message || 'Ошибка при оформлении заказа в Payerpin' },
+        { status: response.status }
+      );
     }
 
-    // 3. Сопоставляем тариф для Payerpin (B2B)
-    const variationMap: Record<string, string> = {
-      "60 UC": "v1",
-      "325 UC": "v2",
-      "660 UC": "v3",
-      "1800 UC": "v4",
-      "3850 UC": "v5",
-      "8100 UC": "v6",
-    };
-
-    const variationId = variationMap[productName] || "v1";
-    const idempotencyKey = `buy_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-    // 4. Отправляем запрос в Payerpin
-    if (process.env.PAYERPIN_API_KEY) {
-      try {
-        const response = await fetch("https://api.payerpin.uz/api/v2/order", {
-          method: "POST",
-          headers: {
-            "X-API-Key": process.env.PAYERPIN_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            game_key: service,
-            variation_id: variationId,
-            player_id: String(targetId),
-            idempotency_key: idempotencyKey,
-          }),
-        });
-
-        const payerpinData = await response.json();
-
-        if (!response.ok || !payerpinData.ok) {
-          console.error("⚠️ Ошибка Payerpin API, запускаем возврат:", payerpinData);
-          
-          // Если Payerpin откланил заказ, вызываем функцию возврата средств refund_order
-          if (order?.id) {
-            await supabase.rpc("refund_order", { p_order_id: order.id });
-          }
-
-          return NextResponse.json(
-            { success: false, error: "PROVIDER_ERROR", details: payerpinData },
-            { status: 400 }
-          );
-        }
-      } catch (payerpinErr) {
-        console.error("⚠️ Не удалось связаться с Payerpin API:", payerpinErr);
-      }
-    }
-
-    return NextResponse.json({ success: true, order });
-  } catch (err: any) {
-    console.error("❌ Ошибка в POST /api/buy:", err);
-    return NextResponse.json({ success: false, error: err.message || "SERVER_ERROR" }, { status: 500 });
+    return NextResponse.json({ success: true, order: data });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
