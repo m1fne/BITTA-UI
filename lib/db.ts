@@ -146,3 +146,30 @@ export async function getVacancy(id: string) {
 export async function archiveVacancy(id: string) {
   await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
 }
+export async function deductBalance(telegramId: number, amount: number) {
+  const tgId = Number(telegramId);
+  const user = await getOrCreateUser(tgId);
+
+  const currentBalance = Number(user?.balance ?? 0);
+  const price = Number(amount);
+
+  if (currentBalance < price) {
+    throw new Error("INSUFFICIENT_FUNDS");
+  }
+
+  const newBalance = currentBalance - price;
+
+  const { data, error } = await supabase
+    .from("users")
+    .update({ balance: newBalance })
+    .eq("telegram_id", tgId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    console.error("❌ Ошибка при списании баланса:", error);
+    throw new Error("DEDUCT_FAILED");
+  }
+
+  return newBalance;
+}

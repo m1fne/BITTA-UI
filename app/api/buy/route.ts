@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getOrCreateUser, deductBalance } from '@/lib/db'; // убедись, что путь к db верный
 
 // Определение game_key и variation_id на основе данных фронтенда
 function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageIdRaw: string) {
@@ -76,6 +77,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Укажите Player ID' }, { status: 400 });
     }
 
+    // --- ДОБАВЛЕНО: Проверка баланса перед запросом ---
+    const telegramId = Number(body.userId || body.telegramId || body.telegram_id);
+    const price = Number(body.price || 0);
+
+    if (telegramId && price > 0) {
+      const user = await getOrCreateUser(telegramId);
+      const userBalance = Number(user?.balance ?? 0);
+
+      if (userBalance < price) {
+        return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
+      }
+    }
+    // ------------------------------------------------
+
     const service = body.service || '';
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
@@ -119,7 +134,18 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, order: data });
+    // --- ДОБАВЛЕНО: Списание денег из базы после успешной покупки ---
+    let newBalance = undefined;
+    if (telegramId && price > 0) {
+      try {
+        newBalance = await deductBalance(telegramId, price);
+      } catch (err) {
+        console.error("Ошибка при списании баланса:", err);
+      }
+    }
+    // ----------------------------------------------------------------
+
+    return NextResponse.json({ success: true, order: data, newBalance });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

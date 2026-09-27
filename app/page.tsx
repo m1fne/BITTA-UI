@@ -549,7 +549,7 @@ const loadBalance = async () => {
   };
 
   // МАГАЗИН
-  const handleOpenShop = (type: ShopType) => {
+const handleOpenShop = (type: ShopType) => {
     haptic("light");
     setActiveShopType(type);
     setShopStep(1);
@@ -583,25 +583,28 @@ const loadBalance = async () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           initData: getInitData(),
+          userId: (window.Telegram?.WebApp as any)?.initDataUnsafe?.user?.id,// <--- ВАЖНО: передаем ID пользователя
           service: activeShopType,
           productName: selectedPack.name,
           targetId: userCredential.trim(),
           price: parseInt(selectedPack.price.replace(/[^\d]/g, ""), 10),
         }),
       });
-const data: any = await res.json();
 
-if (!res.ok || !data.success) {
-  const details = data.details ? JSON.stringify(data.details) : "";
-  const errorMessage = `${data.error || "XATOLIK"}${details ? " - " + details : ""}`;
-  
-  setBuyError(errorMessage);
-  haptic("medium");
-  return;
-}
+      const data: any = await res.json();
+
+      if (!res.ok || !data.success) {
+        const details = data.details ? JSON.stringify(data.details) : "";
+        const errorMessage = `${data.error || "XATOLIK"}${details ? " - " + details : ""}`;
+        
+        setBuyError(errorMessage);
+        haptic("medium");
+        return;
+      }
+
       haptic("success");
       setShopStep(4);
-      loadBalance();
+      loadBalance(); // Перезапрашиваем баланс с сервера
       setTimeout(() => {
         setIsShopOpen(false);
         setShopStep(1);
