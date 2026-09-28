@@ -1111,7 +1111,7 @@ const handleOpenShop = (type: ShopType) => {
             <div style={styles.langRow}>
               <button style={{ ...styles.langPill, ...(uiLanguage === "uz" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("uz")}>O'zbekcha</button>
               <button style={{ ...styles.langPill, ...(uiLanguage === "ru" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("ru")}>Русский</button>
-              <button style={{ ...styles.langPill, ...(uiLanguage === "en" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("en")}>English</button>
+              <button style={{ ...styles.langPill, ...(uiLanguage === "en" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("en")}>Qaraqalpaq</button>
             </div>
             <p style={{ fontSize: "11px", color: "#7E7694", margin: "6px 0 20px 0" }}>Boshqa tillar tez orada qo'shiladi.</p>
 
@@ -1439,18 +1439,18 @@ const handleOpenShop = (type: ShopType) => {
             <div style={styles.drawerBody}>
               <div style={styles.drawerGroupLabel}>Xizmatlar</div>
               <div style={styles.menuNavList}>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("market"); setIsMenuOpen(false); }}>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("market"); setIsMenuOpen(false); }}>
                   <div style={{ ...styles.menuNavIconBadge, background: themes.pink.grad }}><Icons.Gamepad /></div>
                   <span style={styles.menuNavText}>O'yin & Market</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("study"); setIsMenuOpen(false); }}>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("study"); setIsMenuOpen(false); }}>
                   <div style={{ ...styles.menuNavIconBadge, background: themes.teal.grad }}><Icons.Book /></div>
                   <span style={styles.menuNavText}>O'qish va Imtihonlar</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("other"); setIsMenuOpen(false); }}>
-                  <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Sparkles /></div>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("other"); setIsMenuOpen(false); }}>
+                  <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Briefcase /></div>
                   <span style={styles.menuNavText}>Boshqa xizmatlar</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
@@ -1458,7 +1458,7 @@ const handleOpenShop = (type: ShopType) => {
 
               <div style={styles.drawerGroupLabel}>Hisob</div>
               <div style={styles.menuNavList}>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("profile"); setIsMenuOpen(false); }}>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("profile"); setIsMenuOpen(false); }}>
                   <div style={{ ...styles.menuNavIconBadge, background: "linear-gradient(135deg,#7E7694,#5A536E)" }}><Icons.User /></div>
                   <span style={styles.menuNavText}>Profil va sozlamalar</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
