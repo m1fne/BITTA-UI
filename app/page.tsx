@@ -52,18 +52,22 @@ const adPartners = [
 
 const shopProducts: Record<
   ShopType,
-  { title: string; placeholder: string; packs: { name: string; price: string }[] }
+  { 
+    title: string; 
+    placeholder: string; 
+    packs: { name: string; price: string; icon?: string; scale?: number }[] 
+  }
 > = {
-  pubg: {
+pubg: {
     title: "PUBG Mobile UC",
     placeholder: "Player ID (masalan: 5123456789)",
     packs: [
-      { name: "60 UC", price: "13,000 UZS" },
-      { name: "325 UC", price: "58,000 UZS" },
-      { name: "660 UC", price: "115,000 UZS" },
-      { name: "1800 UC", price: "285,000 UZS" },
-      { name: "3850 UC", price: "560,000 UZS" },
-      { name: "8100 UC", price: "1,130,000 UZS" },
+      { name: "60 UC", price: "13,000 UZS", icon: "/pubgmobileuc.png" },
+      { name: "325 UC", price: "58,000 UZS", icon: "/325uc.png", scale: 1.4 },
+      { name: "660 UC", price: "115,000 UZS", icon: "/660uc.png", scale: 2.5 }, // <--- ЗУМ 2.8x
+      { name: "1800 UC", price: "285,000 UZS", icon: "/1800uc.png", scale: 1.2 },
+      { name: "3850 UC", price: "560,000 UZS", icon: "/3850uc.png", scale: 1.3 },
+      { name: "8100 UC", price: "1,130,000 UZS", icon: "/8100uc.png", scale: 1.5 },
     ],
   },
   freefire: {
@@ -100,6 +104,13 @@ mlbb: {
       { name: "12 Oy ", price: "390,000 UZS" },
     ],
   },
+};
+
+const gameLogos: Record<string, string> = {
+  pubg: "/pubg_mobile.jpg",
+  freefire: "/ff_diamonds.jpg",
+  premium: "/telegram_premium.jpg",
+  mlbb: "/mobile_legends.jpg",
 };
 
 const shopImages: Record<string, string> = {
@@ -1281,10 +1292,29 @@ const handleOpenShop = (type: ShopType) => {
     <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsShopOpen(false)} />
     <div style={styles.bottomSheet} className="bt-sheet">
       <div style={styles.sheetIndicator}></div>
+{/* Шапка модального окна */}
       <div style={styles.modalHeader}>
-        <div style={styles.modalLogo}>
-          {(() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()} {shopProducts[activeShopType].title}
+        <div style={{ ...styles.modalLogo, display: 'flex', alignItems: 'center', gap: '10px' }}>
+          
+          {/* Берем аватарку игры из gameLogos */}
+          {gameLogos[activeShopType] ? (
+            <img 
+              src={gameLogos[activeShopType]} 
+              alt="Game Logo" 
+              style={{ 
+                width: '28px', 
+                height: '28px', 
+                borderRadius: '8px', 
+                objectFit: 'cover' 
+              }} 
+            />
+          ) : (
+            (() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()
+          )}
+
+          <span>{shopProducts[activeShopType].title}</span>
         </div>
+
         {shopStep !== 4 && (
           <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}>
             <Icons.Close />
@@ -1320,25 +1350,27 @@ const handleOpenShop = (type: ShopType) => {
                     <div style={styles.packPrice}>{pack.price}</div>
                   </div>
 
-                  {/* Картинка подставляется автоматически! */}
-                  {packIcon && (
-                    <img
-                      src={packIcon}
-                      alt="icon"
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        objectFit: 'contain',
-                        flexShrink: 0
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+          {/* Картинка подставляется автоматически с учётом зума! */}
+                            {packIcon && (
+                              <img
+                                src={packIcon}
+                                alt="icon"
+                                style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  objectFit: 'contain',
+                                  flexShrink: 0,
+                                  transform: pack.scale ? `scale(${pack.scale})` : 'none',
+                                  transition: 'transform 0.2s ease'
+                                }}
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
       {/* ШАГ 2: ВВОД PLAYER ID И ОПЛАТА */}
       {shopStep === 2 && selectedPack && (
