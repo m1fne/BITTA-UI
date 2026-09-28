@@ -70,33 +70,34 @@ const shopProducts: Record<
     title: "Free Fire Almazlar",
     placeholder: "Player ID (masalan: 78291044)",
     packs: [
-      { name: "100 Almaz", price: "14,000 UZS" },
-      { name: "210 Almaz", price: "26,000 UZS" },
-      { name: "310 Almaz", price: "39,000 UZS" },
-      { name: "530 Almaz", price: "62,000 UZS" },
-      { name: "1080 Almaz", price: "125,000 UZS" },
+      { name: "110 Almaz", price: "12,000 UZS" },
+      { name: "341 Almaz", price: "32,000 UZS" },
+      { name: "572 Almaz", price: "53,000 UZS" },
+      { name: "1166 Almaz", price: "101,000 UZS" },
+      { name: "2398 Almaz", price: "199,000 UZS" },
+      { name: "6160 Almaz", price: "495,000 UZS" },
     ],
   },
 mlbb: {
     title: "Mobile Legends",
     placeholder: "User ID va Zone ID kiriting (masalan: 12345678 1234)",
     packs: [
-      { name: "14 Diamonds", price: "6 000 so'm" },
-      { name: "42 Diamonds", price: "12 500 so'm" },
-      { name: "165 Diamonds", price: "43 000 so'm" },
-      { name: "275 Diamonds", price: "71 000 so'm"},
-      { name: "565 Diamonds", price: "145 000 so'm" },
-      { name: "Weekly elite pack", price: "16 000 so'm" },
-      { name: "Monthly elite pack", price: "77 000 so'm" },
+      { name: "14 Diamonds", price: "5 000 so'm" },
+      { name: "42 Diamonds", price: "11 000 so'm" },
+      { name: "170 Diamonds", price: "38 000 so'm" },
+      { name: "284 Diamonds", price: "62 000 so'm"},
+      { name: "706 Diamonds", price: "115 000 so'm" },
+      { name: "1084 diamonds", price: "220 000 so'm" },
+      { name: "3688 diamonds", price: "590 000 so'm" },
     ],
   },
   premium: {
     title: "Telegram Premium",
     placeholder: "Telegram Username (masalan: @username)",
     packs: [
-      { name: "3 Oy ", price: "195,000 UZS" },
-      { name: "6 Oy ", price: "255,000 UZS" },
-      { name: "12 Oy ", price: "450,000 UZS" },
+      { name: "3 Oy ", price: "160,000 UZS" },
+      { name: "6 Oy ", price: "220,000 UZS" },
+      { name: "12 Oy ", price: "390,000 UZS" },
     ],
   },
 };
@@ -336,22 +337,7 @@ export default function Home() {
   const [isEduOpen, setIsEduOpen] = useState(false);
   const [eduType, setEduType] = useState<EduType | null>(null);
 
-  // БАК 3: Вакансии
-  const [isVacancyOpen, setIsVacancyOpen] = useState(false);
-  const [vacancyTab, setVacancyTab] = useState<"job" | "worker">("job");
-  const [isCreatingVacancy, setIsCreatingVacancy] = useState(false);
-  const [vacSubmitted, setVacSubmitted] = useState(false);
-  const [vacancies, setVacancies] = useState<{ id: string; title: string; budget: string; description: string; contact: string }[]>([]);
-  const [isLoadingVacancies, setIsLoadingVacancies] = useState(false);
-  const [vacListError, setVacListError] = useState("");
 
-  const [newVacType, setNewVacType] = useState<"job" | "worker">("job");
-  const [newVacTitle, setNewVacTitle] = useState("");
-  const [newVacBudget, setNewVacBudget] = useState("");
-  const [newVacDesc, setNewVacDesc] = useState("");
-  const [newVacContact, setNewVacContact] = useState("");
-  const [isSubmittingVacancy, setIsSubmittingVacancy] = useState(false);
-  const [vacSubmitError, setVacSubmitError] = useState("");
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -626,77 +612,6 @@ const handleOpenShop = (type: ShopType) => {
     setIsEduOpen(true);
   };
 
-  const loadVacancies = async (type: "job" | "worker") => {
-    setIsLoadingVacancies(true);
-    setVacListError("");
-    try {
-      const res = await fetch(`/api/vacancies?type=${type}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setVacListError(`Xatolik: ${data.error ?? "HTTP " + res.status}`);
-        return;
-      }
-      setVacancies(data.vacancies ?? []);
-    } catch {
-      setVacListError("Server bilan bog'lanib bo'lmadi (tarmoq xatosi).");
-    } finally {
-      setIsLoadingVacancies(false);
-    }
-  };
-
-  // Как только шторка открыта (и мы не в форме создания) — грузим актуальный список под выбранную вкладку.
-  useEffect(() => {
-    if (isVacancyOpen && !isCreatingVacancy) {
-      loadVacancies(vacancyTab);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVacancyOpen, vacancyTab, isCreatingVacancy]);
-
-  const handleCreateVacancy = async () => {
-    if (!newVacTitle.trim() || !newVacBudget.trim() || !newVacDesc.trim() || !newVacContact.trim()) {
-      haptic("medium");
-      setVacSubmitError("Barcha maydonlarni to'ldiring");
-      return;
-    }
-    setIsSubmittingVacancy(true);
-    setVacSubmitError("");
-    try {
-      const res = await fetch("/api/vacancies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          initData: getInitData(),
-          type: newVacType,
-          title: newVacTitle.trim(),
-          budget: newVacBudget.trim(),
-          description: newVacDesc.trim(),
-          contact: newVacContact.trim(),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) {
-        setVacSubmitError(`Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`);
-        haptic("medium");
-        return;
-      }
-      haptic("success");
-      setVacSubmitted(true);
-      setTimeout(() => {
-        setIsCreatingVacancy(false);
-        setIsVacancyOpen(false);
-        setVacSubmitted(false);
-        setNewVacTitle("");
-        setNewVacBudget("");
-        setNewVacDesc("");
-        setNewVacContact("");
-      }, 1800);
-    } catch {
-      setVacSubmitError("Server bilan bog'lanib bo'lmadi (tarmoq xatosi).");
-      haptic("medium");
-    } finally {
-      setIsSubmittingVacancy(false);
-    }
-  };
 
   // Поиск по всему приложению
   const searchCatalog = [
@@ -707,8 +622,6 @@ const handleOpenShop = (type: ShopType) => {
     { id: "e-ielts", group: "Ta'lim", theme: themes.teal, icon: Icons.Book, title: "IELTS.GG", desc: "IELTS imtihoniga tayyorgarlik", keywords: ["ielts", "ingliz", "til"], action: () => openLinkInside("https://ielts.gg") },
     { id: "e-cefr", group: "Ta'lim", theme: themes.teal, icon: Icons.Book, title: "CEFR Imtihonlari", desc: "Milliy sertifikat materiallari", keywords: ["cefr", "sertifikat"], action: () => handleOpenEdu("cefr") },
     { id: "e-prava", group: "Ta'lim", theme: themes.gold, icon: Icons.Pravaga, title: "Pravaga Tayyorgarlik", desc: "YHQ va GAI testlari", keywords: ["prava", "gai", "yhq", "avtomobil"], action: () => handleOpenEdu("prava") },
-    { id: "v-job", group: "Ish", theme: themes.violet, icon: Icons.Briefcase, title: "Ish topish", desc: "Bo'sh vakansiyalar", keywords: ["ish", "vakansiya", "job"], action: () => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); } },
-    { id: "v-worker", group: "Ish", theme: themes.violet, icon: Icons.Briefcase, title: "Ishga olish", desc: "Xodimlar rezyumesi", keywords: ["xodim", "rezyume", "ishchi"], action: () => { haptic("light"); setVacancyTab("worker"); setIsVacancyOpen(true); } },
     ...adPartners.map((ad) => ({ id: `ad-${ad.id}`, group: ad.badge, theme: themes.gold, icon: Icons.Sparkle, title: ad.title, desc: ad.desc, keywords: [ad.category, ad.title.toLowerCase()], action: () => openLinkInside(ad.link) })),
   ];
 
@@ -829,7 +742,6 @@ const handleOpenShop = (type: ShopType) => {
               {activeView === "home" && "bitta"}
               {activeView === "market" && "O'yin & Market"}
               {activeView === "study" && "Ta'lim"}
-              {activeView === "jobs" && "Vakansiya"}
               {activeView === "profile" && "Profil"}
             </span>
           </div>
@@ -933,20 +845,7 @@ const handleOpenShop = (type: ShopType) => {
                     <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                   </button>
 
-                  <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("jobs"); }}>
-                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
-                      <img 
-                        src="/vakanisiya.png" 
-                        alt="Ishga Vakansiya" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      />
-                    </div>
-                    <div style={styles.categoryTextWrap}>
-                      <span style={styles.categoryTitle}>Ishga Vakansiya</span>
-                      <span style={styles.categorySub}>Ish topish yoki xodim qidirish</span>
-                    </div>
-                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                  </button>
+
                   <button 
                     style={styles.categoryCard} 
                     className="bt-tile"
@@ -1135,32 +1034,6 @@ const handleOpenShop = (type: ShopType) => {
           </div>
         )}
 
-{/* ===================== ISHGA VAKANSIYA ===================== */}
-        {activeView === "jobs" && (
-          <div style={styles.bigTileList}>
-            <button style={styles.bigTile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("job"); setIsVacancyOpen(true); }}>
-              <div style={{ ...styles.bigTileIconBadge, background: themes.violet.grad, boxShadow: `0 8px 18px ${themes.violet.glow}` }}>
-                <Icons.Briefcase />
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>Ish topish</span>
-                <span style={styles.categorySub}>Bo'sh vakansiyalar</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-
-            <button style={styles.bigTile} className="bt-tile" onClick={() => { haptic("light"); setVacancyTab("worker"); setIsVacancyOpen(true); }}>
-              <div style={{ ...styles.bigTileIconBadge, background: themes.pink.grad, boxShadow: `0 8px 18px ${themes.pink.glow}` }}>
-                <Icons.Briefcase />
-              </div>
-              <div style={styles.categoryTextWrap}>
-                <span style={styles.categoryTitle}>Ishga olish</span>
-                <span style={styles.categorySub}>Xodimlar rezyumesi</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-          </div>
-        )}
 
 {/* ===================== BOSHQA XIZMATLAR ===================== */}
 {activeView === "boshqa" && (
@@ -1551,151 +1424,9 @@ const handleOpenShop = (type: ShopType) => {
         </>
       )}
 
-      {/* ===================== МОДАЛЬНОЕ ОКНО: ВАКАНСИИ ===================== */}
-      {isVacancyOpen && (
-        <>
-          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsVacancyOpen(false)} />
-          <div style={styles.bottomSheet} className="bt-sheet">
-            <div style={styles.sheetIndicator}></div>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}><Icons.Briefcase /> Vakansiyalar va Ishlar</div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsVacancyOpen(false)}><Icons.Close /></button>
-            </div>
 
-            <div style={styles.sheetBody}>
-              {!isCreatingVacancy ? (
-                <>
-                  <div style={styles.tabRow}>
-                    <button
-                      style={{ ...styles.tabBtn, ...(vacancyTab === "job" ? styles.tabBtnActive : {}) }}
-                      className="bt-tab-btn"
-                      onClick={() => { haptic("light"); setVacancyTab("job"); }}
-                    >
-                      Bo'sh ish o'rinlari
-                    </button>
-                    <button
-                      style={{ ...styles.tabBtn, ...(vacancyTab === "worker" ? styles.tabBtnActive : {}) }}
-                      className="bt-tab-btn"
-                      onClick={() => { haptic("light"); setVacancyTab("worker"); }}
-                    >
-                      Xodimlar (Rezyume)
-                    </button>
-                  </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "240px", overflowY: "auto", margin: "14px 0" }}>
-                    {isLoadingVacancies ? (
-                      <div style={{ textAlign: "center", color: "#A79FC2", fontSize: "12.5px", padding: "20px 0" }}>Yuklanmoqda...</div>
-                    ) : vacListError ? (
-                      <div style={{ textAlign: "center", color: "#FF9DAF", fontSize: "12.5px", padding: "20px 0" }}>{vacListError}</div>
-                    ) : vacancies.length === 0 ? (
-                      <div style={{ textAlign: "center", color: "#A79FC2", fontSize: "12.5px", padding: "20px 0" }}>
-                        Hozircha e'lonlar yo'q. Birinchi bo'lib joylashtiring!
-                      </div>
-                    ) : (
-                      vacancies.map((vac) => (
-                        <div key={vac.id} style={styles.vacCard}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={styles.vacTitle}>{vac.title}</div>
-                            <div style={styles.vacBudget}>{vac.budget}</div>
-                          </div>
-                          <div style={styles.vacDesc}>{vac.description}</div>
-                          <button
-                            style={styles.vacApplyBtn}
-                            className="bt-secondary-btn"
-                            onClick={() => openTelegramLink(`https://t.me/${vac.contact.replace('@', '')}`)}
-                          >
-                            Bog'lanish ({vac.contact})
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <button
-                    style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }}
-                    className="bt-primary-btn"
-                    onClick={() => { haptic("light"); setIsCreatingVacancy(true); }}
-                  >
-                    + Yangi e'lon joylash
-                  </button>
-                </>
-              ) : vacSubmitted ? (
-                <div style={styles.successBox}>
-                  <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
-                    <Icons.Check />
-                  </div>
-                  <div style={styles.successTitle}>E'loningiz yuborildi!</div>
-                  <div style={styles.successSub}>E'loningiz darhol ro'yxatda ko'rinadi.</div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#fff", marginBottom: "12px" }}>E'lon berish</div>
-                  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                    <button
-                      style={{ ...styles.tabBtn, flex: 1, ...(newVacType === "job" ? styles.tabBtnActive : {}) }}
-                      onClick={() => setNewVacType("job")}
-                    >
-                      Ish taklif etaman
-                    </button>
-                    <button
-                      style={{ ...styles.tabBtn, flex: 1, ...(newVacType === "worker" ? styles.tabBtnActive : {}) }}
-                      onClick={() => setNewVacType("worker")}
-                    >
-                      Ish qidiryapman
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    placeholder="Sarlavha (masalan: Dizayner kerak)"
-                    value={newVacTitle}
-                    onChange={e => setNewVacTitle(e.target.value)}
-                    style={{ ...styles.input, marginBottom: "8px" }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Maosh / Byudjet (masalan: 1,000,000 UZS)"
-                    value={newVacBudget}
-                    onChange={e => setNewVacBudget(e.target.value)}
-                    style={{ ...styles.input, marginBottom: "8px" }}
-                  />
-                  <textarea
-                    placeholder="Batafsil ma'lumot..."
-                    value={newVacDesc}
-                    onChange={e => setNewVacDesc(e.target.value)}
-                    style={{ ...styles.input, height: "60px", marginBottom: "8px", resize: "none" }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Aloqa uchun Telegram (masalan: @username)"
-                    value={newVacContact}
-                    onChange={e => setNewVacContact(e.target.value)}
-                    style={{ ...styles.input, marginBottom: "14px" }}
-                  />
-
-                  {vacSubmitError && (
-                    <div style={{ color: "#FF9DAF", fontSize: "12px", marginBottom: "10px" }}>{vacSubmitError}</div>
-                  )}
-
-                  <div style={styles.btnRow}>
-                    <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setIsCreatingVacancy(false)}>Bekor qilish</button>
-                    <button
-                      style={{ ...styles.btnPrimary, background: themes.violet.grad, opacity: isSubmittingVacancy ? 0.7 : 1 }}
-                      className="bt-primary-btn"
-                      onClick={handleCreateVacancy}
-                      disabled={isSubmittingVacancy}
-                    >
-                      {isSubmittingVacancy ? "Yuborilmoqda..." : "Tasdiqlash"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ===================== БОКОВОЕ МЕНЮ ===================== */}
+{/* ===================== БОКОВОЕ МЕНЮ ===================== */}
       {isMenuOpen && (
         <>
           <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsMenuOpen(false)} />
@@ -1718,9 +1449,9 @@ const handleOpenShop = (type: ShopType) => {
                   <span style={styles.menuNavText}>O'qish va Imtihonlar</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("jobs"); setIsMenuOpen(false); }}>
-                  <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Briefcase /></div>
-                  <span style={styles.menuNavText}>Ishga Vakansiya</span>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { haptic("light"); setActiveView("other"); setIsMenuOpen(false); }}>
+                  <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Sparkles /></div>
+                  <span style={styles.menuNavText}>Boshqa xizmatlar</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
               </div>

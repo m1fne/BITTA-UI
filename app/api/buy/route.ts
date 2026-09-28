@@ -35,21 +35,20 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
   }
 
   // 3. MOBILE LEGENDS
-  if (service.includes('mlbb') || service.includes('legend')) {
-    let variation_id = 'fzr_topup__mobile_legends_global__78_8_diamonds';
-    if (product.includes('706') || product.includes('625')) variation_id = 'fzr_topup__mobile_legends_global__625_81_diamonds';
-    else if (product.includes('565') || product.includes('500')) variation_id = 'fzr_topup__mobile_legends_global__500_65_diamonds_first_top_up_bonus';
-    else if (product.includes('275') || product.includes('250')) variation_id = 'fzr_topup__mobile_legends_global__250_25_diamonds_first_top_up_bonus';
-    else if (product.includes('257') || product.includes('234')) variation_id = 'fzr_topup__mobile_legends_global__234_23_diamonds';
-    else if (product.includes('172') || product.includes('156')) variation_id = 'fzr_topup__mobile_legends_global__156_16_diamonds';
-    else if (product.includes('165') || product.includes('150')) variation_id = 'fzr_topup__mobile_legends_global__150_15_diamonds_first_top_up_bonus';
-    else if (product.includes('86') || product.includes('78')) variation_id = 'fzr_topup__mobile_legends_global__78_8_diamonds';
-    else if (product.includes('55') || product.includes('50')) variation_id = 'fzr_topup__mobile_legends_global__50_5_diamonds_first_top_up_bonus';
+if (service.includes('mlbb') || service.includes('legend')) {
+    let variation_id = 'fzr_topup__mobile_legends_global__14_diamonds';
+    
+    if (product.includes('3688')) variation_id = 'fzr_topup__mobile_legends_global__3688_diamonds';
+    else if (product.includes('1084')) variation_id = 'fzr_topup__mobile_legends_global__1084_diamonds';
+    else if (product.includes('706')) variation_id = 'fzr_topup__mobile_legends_global__706_diamonds';
+    else if (product.includes('284')) variation_id = 'fzr_topup__mobile_legends_global__284_diamonds';
+    else if (product.includes('170')) variation_id = 'fzr_topup__mobile_legends_global__170_diamonds';
+    else if (product.includes('42')) variation_id = 'fzr_topup__mobile_legends_global__42_diamonds';
+    else if (product.includes('14')) variation_id = 'fzr_topup__mobile_legends_global__14_diamonds';
     else if (product.includes('weekly') || product.includes('pass')) variation_id = 'fzr_topup__mobile_legends_global__weekly_pass';
 
     return { game_key: 'mlbb', variation_id };
   }
-
   // 4. TELEGRAM PREMIUM
   if (service.includes('tg') || service.includes('telegram')) {
     let variation_id = 'premium_3';
