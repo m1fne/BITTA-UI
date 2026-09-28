@@ -348,6 +348,14 @@ export default function Home() {
   const [isEduOpen, setIsEduOpen] = useState(false);
   const [eduType, setEduType] = useState<EduType | null>(null);
 
+  // 1. Состояния для открытия модалок FAQ и Оферты (добавьте к остальным useState)
+const [isFaqOpen, setIsFaqOpen] = useState(false);
+const [isTermsOpen, setIsTermsOpen] = useState(false);
+
+// 2. Функции для их открытия
+const handleOpenFaq = () => setIsFaqOpen(true);
+const handleOpenTerms = () => setIsTermsOpen(true);
+
 
 
   useEffect(() => {
@@ -817,7 +825,7 @@ const handleOpenShop = (type: ShopType) => {
                 <section style={styles.hero}>
                   <div style={styles.heroBadge}><Icons.Sparkle /> Bitta ilovada — hammasi</div>
                   <h1 className="bt-display" style={styles.heroTitle}>Nimadan boshlaymiz?</h1>
-                  <p style={styles.heroSub}>O'yiningizni to'ldiring, imtihonga tayyorlaning yoki ish toping — barchasi shu yerda</p>
+                  <p style={styles.heroSub}>O'yin balansingizni to'ldiring va ko`ngil ochar xizmatlardan foydalaning!</p>
                 </section>
 
 {/* 3 КРУПНЫХ РАЗДЕЛА (Теперь 4 с ТОП-блоком!) */}
@@ -880,6 +888,158 @@ const handleOpenShop = (type: ShopType) => {
           </>
         )}
 
+{/* ===================== FOOTER (ПОДВАЛ) ===================== */}
+<footer style={{
+  marginTop: '28px',
+  paddingBottom: '80px', // Запас снизу, чтобы плавающая кнопка BITTA AI не перекрывала текст!
+  textAlign: 'center',
+  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+  paddingTop: '16px'
+}}>
+  {/* Навигация мелким текстом */}
+  <div style={{
+    display: 'flex',
+    justify: 'center',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '10px'
+  }}>
+    <button 
+      onClick={() => handleOpenFaq()} 
+      style={{
+        background: 'none',
+        border: 'none',
+        color: 'rgba(255, 255, 255, 0.5)',
+        fontSize: '11px',
+        cursor: 'pointer',
+        padding: 0
+      }}
+    >
+      Savol-javoblar (FAQ)
+    </button>
+
+    <span style={{ color: 'rgba(255, 255, 255, 0.2)', fontSize: '10px' }}>•</span>
+
+    <button 
+      onClick={() => handleOpenTerms()} 
+      style={{
+        background: 'none',
+        border: 'none',
+        color: 'rgba(255, 255, 255, 0.5)',
+        fontSize: '11px',
+        cursor: 'pointer',
+        padding: 0
+      }}
+    >
+      Foydalanish shartlari
+    </button>
+  </div>
+
+  {/* Копирайт и версия */}
+  <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.3)' }}>
+    © 2026 BITTA Platform. Barcha huquqlar himoyalangan.
+  </div>
+</footer>
+{/* ===================== МОДАЛКА FAQ ===================== */}
+      {isFaqOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justify: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#181528',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '480px',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            padding: '20px',
+            color: '#FFFFFF'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Savol-javoblar (FAQ)</h3>
+              <button 
+                onClick={() => setIsFaqOpen(false)}
+                style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
+              >✕</button>
+            </div>
+
+            <div style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.8)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <b style={{ color: '#FFF' }}>1. Hisobni to'ldirish qanday amalga oshiriladi?</b>
+                <p style={{ margin: '4px 0 0 0' }}>Barcha xaridlar Player ID orqali to'g'ridan-to'g me'yoriy tartibda o'yinga tushiriladi. Parol berish shart emas.</p>
+              </div>
+              <div>
+                <b style={{ color: '#FFF' }}>2. Valyuta qancha vaqtda tushadi?</b>
+                <p style={{ margin: '4px 0 0 0' }}>95% holatlarda to'lov qiliningach 1-5 daqiqa ichida tushadi. Ba'zan server yuklanishi sabab 24 soatgacha cho'zilishi mumkin.</p>
+              </div>
+              <div>
+                <b style={{ color: '#FFF' }}>3. ID xato kiritilsa nima bo'ladi?</b>
+                <p style={{ margin: '4px 0 0 0' }}>To'lovdan oldin ID raqamingizni tekshiring. Agar valyuta noto'g'ri IDga tushgan bo'lsa, qaytarish imkonsiz.</p>
+              </div>
+              <div>
+                <b style={{ color: '#FFF' }}>4. Qanday to'lov turlari bor?</b>
+                <p style={{ margin: '4px 0 0 0' }}>Uzcard, Humo, Payme, Click va BITTA ichki balansi orqali to'lash mumkin.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== МОДАЛКА OFERTA ===================== */}
+      {isTermsOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justify: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#181528',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '480px',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            padding: '20px',
+            color: '#FFFFFF'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Foydalanish shartlari</h3>
+              <button 
+                onClick={() => setIsTermsOpen(false)}
+                style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
+              >✕</button>
+            </div>
+
+            <div style={{ fontSize: '12px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.7)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p><b>1. Umumiy qoidalar:</b> BITTA platformasi raqamli xizmatlar va o'yin valyutalarini yetkazib beruvchi mustaqil servis hisoblanadi.</p>
+              <p><b>2. Mas'uliyat:</b> Foydalanuvchi kiritgan Player ID rekvizitlari to'g'riligiga o'zi javobgar. Noto'g'ri ID uchun mablag' qaytarilmaydi.</p>
+              <p><b>3. Qaytarish shartlari:</b> Muvaffaqiyatli yetkazilgan raqamli tovarlar qaytarib olinmaydi va almashtirilmaydi.</p>
+            </div>
+          </div>
+        </div>
+      )}
 {/* ===================== O'YIN & MARKET ===================== */}
 {activeView === "market" && (
   <div style={{
@@ -1138,8 +1298,8 @@ const handleOpenShop = (type: ShopType) => {
               <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
                 <Icons.Headphones /> Qo'llab-quvvatlash (@bitta_mngr)
               </button>
-              <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_official")}>
-                <Icons.Megaphone /> Rasmiy kanal
+              <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_hub")}>
+                <Icons.Megaphone /> Rasmiy kanal 
               </button>
             </div>
           </div>
@@ -1483,12 +1643,7 @@ const handleOpenShop = (type: ShopType) => {
                   <span style={styles.menuNavText}>O'yin & Market</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                 </button>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("study"); setIsMenuOpen(false); }}>
-                  <div style={{ ...styles.menuNavIconBadge, background: themes.teal.grad }}><Icons.Book /></div>
-                  <span style={styles.menuNavText}>O'qish va Imtihonlar</span>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("other"); setIsMenuOpen(false); }}>
+                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("boshqa"); setIsMenuOpen(false); }}>
                   <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Briefcase /></div>
                   <span style={styles.menuNavText}>Boshqa xizmatlar</span>
                   <span style={styles.arrowRight}><Icons.ChevronRight /></span>
