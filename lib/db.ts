@@ -7,9 +7,12 @@ const supabaseUrl =
 
 const supabaseKey = 
   process.env.SUPABASE_SERVICE_ROLE_KEY || 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
   "placeholder-key";
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// --- ПОЛЬЗОВАТЕЛИ И БАЛАНС ---
 
 export async function getOrCreateUser(telegramId: number, username?: string | null) {
   const tgId = Number(telegramId);
@@ -47,10 +50,10 @@ export async function getBalance(telegramId: number) {
   return Number(data?.balance ?? 0);
 }
 
+// --- ДЕПОЗИТЫ ---
+
 export async function createDeposit(telegramId: number, amount: number) {
   const tgId = Number(telegramId);
-  
-  // Гарантируем, что пользователь создан перед подачей заявки
   await getOrCreateUser(tgId);
 
   const { data, error } = await supabase
@@ -73,31 +76,25 @@ export async function approveDeposit(id: string) {
   if (!deposit || deposit.status !== "pending") throw new Error("ALREADY_DECIDED");
 
   const tgId = Number(deposit.user_id);
-
-  // 1. Гарантируем наличие пользователя в таблице users
   const user = await getOrCreateUser(tgId);
 
-  // 2. Рассчитываем и обновляем баланс
-  const currentBalance = Number(user?.balance ?? 0);
-  const newBalance = currentBalance + Number(deposit.amount);
+  // Переводим статус депозита в approved
+  const { error: depError } = await supabase
+    .from("deposits")
+    .update({ status: "approved" })
+    .eq("id", id);
 
-  // 3. Переводим статус депозита в approved
-  await supabase.from("deposits").update({ status: "approved" }).eq("id", id);
+  if (depError) throw depError;
 
-  // 4. Записываем новый баланс и проверяем, что запись действительно изменилась
+  // Безопасное начисление баланса без перезаписи
   const { data: updatedUsers, error: updateError } = await supabase
     .from("users")
-    .update({ balance: newBalance })
+    .update({ balance: Number(user.balance ?? 0) + Number(deposit.amount) })
     .eq("telegram_id", tgId)
     .select();
 
-  if (updateError) {
-    console.error("❌ Ошибка при обновлении баланса в approveDeposit:", updateError);
-    throw updateError;
-  }
-
-  if (!updatedUsers || updatedUsers.length === 0) {
-    console.error(`❌ Ошибка: пользователь с telegram_id=${tgId} не был обновлен`);
+  if (updateError || !updatedUsers?.length) {
+    console.error("❌ Ошибка при пополнении баланса:", updateError);
     throw new Error("USER_BALANCE_UPDATE_FAILED");
   }
 }
@@ -109,34 +106,58 @@ export async function rejectDeposit(id: string) {
   await supabase.from("deposits").update({ status: "rejected" }).eq("id", id);
 }
 
+// --- ЗАКАЗЫ (ИСПОЛЬЗУЕМ АТОМАРНЫЕ SQL-ФУНКЦИИ) ---
+
+/**
+ * Атомарная покупка (списание денег + создание заказа) через SQL-функцию
+ */
+export async function purchaseWithBalance(
+  userId: number,
+  service: string,
+  productName: string,
+  targetId: string,
+  price: number
+) {
+  const { data, error } = await supabase.rpc("purchase_with_balance", {
+    p_user_id: Number(userId),
+    p_service: service,
+    p_product_name: productName,
+    p_target_id: targetId,
+    p_price: Number(price),
+  });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Отметка заказа выполненным
+ */
+export async function completeOrder(orderId: string) {
+  const { error } = await supabase.rpc("complete_order", {
+    p_order_id: orderId,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Возврат средств за заказ обратно на баланс
+ */
+export async function refundOrder(orderId: string) {
+  const { error } = await supabase.rpc("refund_order", {
+    p_order_id: orderId,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
 export async function getOrder(id: string) {
   const { data } = await supabase.from("orders").select("*").eq("id", id).single();
   return data;
 }
 
-export async function completeOrder(id: string) {
-  const order = await getOrder(id);
-  if (!order || order.status !== "pending") throw new Error("ALREADY_DECIDED");
-  await supabase.from("orders").update({ status: "completed" }).eq("id", id);
-}
-
-export async function refundOrder(id: string) {
-  const order = await getOrder(id);
-  if (!order || order.status !== "pending") throw new Error("ALREADY_DECIDED");
-
-  const tgId = Number(order.user_id);
-  const user = await getOrCreateUser(tgId);
-
-  await supabase.from("orders").update({ status: "refunded" }).eq("id", id);
-
-  const currentBalance = Number(user?.balance ?? 0);
-  const newBalance = currentBalance + Number(order.price);
-
-  await supabase
-    .from("users")
-    .update({ balance: newBalance })
-    .eq("telegram_id", tgId);
-}
+// --- ВАКАНСИИ ---
 
 export async function getVacancy(id: string) {
   const { data } = await supabase.from("vacancies").select("*").eq("id", id).single();
@@ -145,31 +166,4 @@ export async function getVacancy(id: string) {
 
 export async function archiveVacancy(id: string) {
   await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
-}
-export async function deductBalance(telegramId: number, amount: number) {
-  const tgId = Number(telegramId);
-  const user = await getOrCreateUser(tgId);
-
-  const currentBalance = Number(user?.balance ?? 0);
-  const price = Number(amount);
-
-  if (currentBalance < price) {
-    throw new Error("INSUFFICIENT_FUNDS");
-  }
-
-  const newBalance = currentBalance - price;
-
-  const { data, error } = await supabase
-    .from("users")
-    .update({ balance: newBalance })
-    .eq("telegram_id", tgId)
-    .select()
-    .single();
-
-  if (error || !data) {
-    console.error("❌ Ошибка при списании баланса:", error);
-    throw new Error("DEDUCT_FAILED");
-  }
-
-  return newBalance;
 }

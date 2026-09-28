@@ -572,7 +572,7 @@ const handleOpenShop = (type: ShopType) => {
     setShopStep(2);
   };
 
-  const handleBuy = async () => {
+const handleBuy = async () => {
     if (!userCredential.trim()) {
       haptic("medium");
       setBuyError("Iltimos, ID kiriting");
@@ -583,12 +583,13 @@ const handleOpenShop = (type: ShopType) => {
     setIsBuying(true);
     setBuyError("");
     try {
+      const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
+
       const res = await fetch("/api/buy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          initData: getInitData(),
-          userId: (window.Telegram?.WebApp as any)?.initDataUnsafe?.user?.id,// <--- ВАЖНО: передаем ID пользователя
+          initData: initData,
           service: activeShopType,
           productName: selectedPack.name,
           targetId: userCredential.trim(),
@@ -609,7 +610,7 @@ const handleOpenShop = (type: ShopType) => {
 
       haptic("success");
       setShopStep(4);
-      loadBalance(); // Перезапрашиваем баланс с сервера
+      loadBalance();
       setTimeout(() => {
         setIsShopOpen(false);
         setShopStep(1);
@@ -888,158 +889,7 @@ const handleOpenShop = (type: ShopType) => {
           </>
         )}
 
-{/* ===================== FOOTER (ПОДВАЛ) ===================== */}
-<footer style={{
-  marginTop: '28px',
-  paddingBottom: '80px', // Запас снизу, чтобы плавающая кнопка BITTA AI не перекрывала текст!
-  textAlign: 'center',
-  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-  paddingTop: '16px'
-}}>
-  {/* Навигация мелким текстом */}
-  <div style={{
-    display: 'flex',
-    justify: 'center',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '10px'
-  }}>
-    <button 
-      onClick={() => handleOpenFaq()} 
-      style={{
-        background: 'none',
-        border: 'none',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '11px',
-        cursor: 'pointer',
-        padding: 0
-      }}
-    >
-      Savol-javoblar (FAQ)
-    </button>
 
-    <span style={{ color: 'rgba(255, 255, 255, 0.2)', fontSize: '10px' }}>•</span>
-
-    <button 
-      onClick={() => handleOpenTerms()} 
-      style={{
-        background: 'none',
-        border: 'none',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '11px',
-        cursor: 'pointer',
-        padding: 0
-      }}
-    >
-      Foydalanish shartlari
-    </button>
-  </div>
-
-  {/* Копирайт и версия */}
-  <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.3)' }}>
-    © 2026 BITTA Platform. Barcha huquqlar himoyalangan.
-  </div>
-</footer>
-{/* ===================== МОДАЛКА FAQ ===================== */}
-      {isFaqOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justify: 'center',
-          padding: '16px'
-        }}>
-          <div style={{
-            background: '#181528',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '20px',
-            width: '100%',
-            maxWidth: '480px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
-            padding: '20px',
-            color: '#FFFFFF'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Savol-javoblar (FAQ)</h3>
-              <button 
-                onClick={() => setIsFaqOpen(false)}
-                style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
-              >✕</button>
-            </div>
-
-            <div style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.8)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <b style={{ color: '#FFF' }}>1. Hisobni to'ldirish qanday amalga oshiriladi?</b>
-                <p style={{ margin: '4px 0 0 0' }}>Barcha xaridlar Player ID orqali to'g'ridan-to'g me'yoriy tartibda o'yinga tushiriladi. Parol berish shart emas.</p>
-              </div>
-              <div>
-                <b style={{ color: '#FFF' }}>2. Valyuta qancha vaqtda tushadi?</b>
-                <p style={{ margin: '4px 0 0 0' }}>95% holatlarda to'lov qiliningach 1-5 daqiqa ichida tushadi. Ba'zan server yuklanishi sabab 24 soatgacha cho'zilishi mumkin.</p>
-              </div>
-              <div>
-                <b style={{ color: '#FFF' }}>3. ID xato kiritilsa nima bo'ladi?</b>
-                <p style={{ margin: '4px 0 0 0' }}>To'lovdan oldin ID raqamingizni tekshiring. Agar valyuta noto'g'ri IDga tushgan bo'lsa, qaytarish imkonsiz.</p>
-              </div>
-              <div>
-                <b style={{ color: '#FFF' }}>4. Qanday to'lov turlari bor?</b>
-                <p style={{ margin: '4px 0 0 0' }}>Uzcard, Humo, Payme, Click va BITTA ichki balansi orqali to'lash mumkin.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== МОДАЛКА OFERTA ===================== */}
-      {isTermsOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justify: 'center',
-          padding: '16px'
-        }}>
-          <div style={{
-            background: '#181528',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '20px',
-            width: '100%',
-            maxWidth: '480px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
-            padding: '20px',
-            color: '#FFFFFF'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Foydalanish shartlari</h3>
-              <button 
-                onClick={() => setIsTermsOpen(false)}
-                style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
-              >✕</button>
-            </div>
-
-            <div style={{ fontSize: '12px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.7)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p><b>1. Umumiy qoidalar:</b> BITTA platformasi raqamli xizmatlar va o'yin valyutalarini yetkazib beruvchi mustaqil servis hisoblanadi.</p>
-              <p><b>2. Mas'uliyat:</b> Foydalanuvchi kiritgan Player ID rekvizitlari to'g'riligiga o'zi javobgar. Noto'g'ri ID uchun mablag' qaytarilmaydi.</p>
-              <p><b>3. Qaytarish shartlari:</b> Muvaffaqiyatli yetkazilgan raqamli tovarlar qaytarib olinmaydi va almashtirilmaydi.</p>
-            </div>
-          </div>
-        </div>
-      )}
 {/* ===================== O'YIN & MARKET ===================== */}
 {activeView === "market" && (
   <div style={{
@@ -1662,6 +1512,161 @@ const handleOpenShop = (type: ShopType) => {
           </div>
         </>
       )}
+      {/* ===================== FOOTER (ПОДВАЛ) ===================== */}
+<footer style={{
+  marginTop: '28px',
+  paddingBottom: '80px', // Запас снизу, чтобы плавающая кнопка BITTA AI не перекрывала текст!
+  textAlign: 'center',
+  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+  paddingTop: '16px'
+}}>
+  {/* Навигация мелким текстом */}
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center', // 1. Исправлено с justify на justifyContent
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '10px'
+  }}>
+    <button 
+      onClick={() => handleOpenFaq()} 
+      style={{
+        background: 'none',
+        border: 'none',
+        color: 'rgba(255, 255, 255, 0.5)',
+        fontSize: '11px',
+        cursor: 'pointer',
+        padding: 0
+      }}
+    >
+      Savol-javoblar (FAQ)
+    </button>
+
+    <span style={{ color: 'rgba(255, 255, 255, 0.2)', fontSize: '10px' }}>•</span>
+
+    <button 
+      onClick={() => handleOpenTerms()} 
+      style={{
+        background: 'none',
+        border: 'none',
+        color: 'rgba(255, 255, 255, 0.5)',
+        fontSize: '11px',
+        cursor: 'pointer',
+        padding: 0
+      }}
+    >
+      Foydalanish shartlari
+    </button>
+  </div>
+
+  {/* Копирайт и версия */}
+  <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.3)' }}>
+    © 2026 BITTA Platform. Barcha huquqlar himoyalangan.
+  </div>
+</footer>
+
+{/* ===================== МОДАЛКА FAQ ===================== */}
+{isFaqOpen && (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(8px)',
+    zIndex: 1000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px'
+  }}>
+    <div style={{
+      background: '#181528',
+      border: '1px solid rgba(255, 255, 255, 0.12)',
+      borderRadius: '20px',
+      width: '100%',
+      maxWidth: '480px',
+      maxHeight: '80vh',
+      overflowY: 'auto',
+      padding: '20px',
+      color: '#FFFFFF'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Savol-javoblar (FAQ)</h3>
+        <button 
+          onClick={() => setIsFaqOpen(false)}
+          style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
+        >✕</button>
+      </div>
+
+      <div style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.8)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div>
+          {/* 2. Цифра 1 перенесена внутрь <b> для единообразия */}
+          <b style={{ color: '#FFF' }}>1. Hisobni to'ldirish qanday amalga oshiriladi?</b>
+          <p style={{ margin: '4px 0 0 0' }}>Barcha xaridlar Player ID orqali to'g'ridan-to'g me'yoriy tartibda o'yinga tushiriladi. Parol berish shart emas.</p>
+        </div>
+        <div>
+          <b style={{ color: '#FFF' }}>2. Valyuta qancha vaqtda tushadi?</b>
+          <p style={{ margin: '4px 0 0 0' }}>95% holatlarda to'lov qiliningach 1-5 daqiqa ichida tushadi. Ba'zan server yuklanishi sabab 24 soatgacha cho'zilishi mumkin.</p>
+        </div>
+        <div>
+          <b style={{ color: '#FFF' }}>3. ID xato kiritilsa nima bo'ladi?</b>
+          <p style={{ margin: '4px 0 0 0' }}>To'lovdan oldin ID raqamingizni tekshiring. Agar valyuta noto'g'ri IDga tushgan bo'lsa, qaytarish imkonsiz.</p>
+        </div>
+        <div>
+          <b style={{ color: '#FFF' }}>4. Qanday to'lov turlari bor?</b>
+          <p style={{ margin: '4px 0 0 0' }}>Uzcard, Humo, Payme, Click va BITTA ichki balansi orqali to'lash mumkin.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* ===================== МОДАЛКА OFERTA ===================== */}
+{isTermsOpen && (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(8px)',
+    zIndex: 1000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px'
+  }}>
+    <div style={{
+      background: '#181528',
+      border: '1px solid rgba(255, 255, 255, 0.12)',
+      borderRadius: '20px',
+      width: '100%',
+      maxWidth: '480px',
+      maxHeight: '80vh',
+      overflowY: 'auto',
+      padding: '20px',
+      color: '#FFFFFF'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Foydalanish shartlari</h3>
+        <button 
+          onClick={() => setIsTermsOpen(false)}
+          style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
+        >✕</button>
+      </div>
+
+      <div style={{ fontSize: '12px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.7)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* 3. Цифра 1 внесена внутрь тега <p> */}
+        <p><b>1. Umumiy qoidalar:</b> BITTA platformasi raqamli xizmatlar va o'yin valyutalarini yetkazib beruvchi mustaqil servis hisoblanadi.</p>
+        <p><b>2. Mas'uliyat:</b> Foydalanuvchi kiritgan Player ID rekvizitlari to'g'riligiga o'zi javobgar. Noto'g'ri ID uchun mablag' qaytarilmaydi.</p>
+        <p><b>3. Qaytarish shartlari:</b> Muvaffaqiyatli yetkazilgan raqamli tovarlar qaytarib olinmaydi va almashtirilmaydi.</p>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ===================== ПЛАВАЮЩАЯ КНОПКА BITTA AI ===================== */}
       {!isAiOpen && (
@@ -1726,6 +1731,7 @@ const handleOpenShop = (type: ShopType) => {
     </div>
   );
 }
+
 
 // ===================== СТИЛИ (JS OBJECT) =====================
 

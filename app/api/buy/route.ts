@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getOrCreateUser, deductBalance } from '@/lib/db'; // убедись, что путь к db верный
+import { purchaseWithBalance, refundOrder, completeOrder } from '@/lib/db';
+import { debugVerifyTelegramInitData } from '@/lib/telegram-auth';
 
-// Определение game_key и variation_id на основе данных фронтенда
 function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageIdRaw: string) {
   const service = (serviceRaw || '').toLowerCase().trim();
   const product = (productNameRaw || packageIdRaw || '').toLowerCase().trim();
 
-  // 1. PUBG MOBILE
   if (service.includes('pubg')) {
     let variation_id = 'fzr_topup__pubg_mobile_auto__60_uc';
     if (product.includes('8100')) variation_id = 'fzr_topup__pubg_mobile_auto__8100_uc';
@@ -19,7 +18,6 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     return { game_key: 'pubg', variation_id };
   }
 
-  // 2. FREE FIRE
   if (service.includes('free') || service.includes('ff')) {
     let variation_id = 'fzr_topup__free_fire_cis__110_diamonds';
     if (product.includes('6160')) variation_id = 'fzr_topup__free_fire_cis__6160_diamonds';
@@ -34,10 +32,8 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     return { game_key: 'free-fire', variation_id };
   }
 
-  // 3. MOBILE LEGENDS
-if (service.includes('mlbb') || service.includes('legend')) {
+  if (service.includes('mlbb') || service.includes('legend')) {
     let variation_id = 'fzr_topup__mobile_legends_global__14_diamonds';
-    
     if (product.includes('3688')) variation_id = 'fzr_topup__mobile_legends_global__3688_diamonds';
     else if (product.includes('1084')) variation_id = 'fzr_topup__mobile_legends_global__1084_diamonds';
     else if (product.includes('706')) variation_id = 'fzr_topup__mobile_legends_global__706_diamonds';
@@ -49,7 +45,7 @@ if (service.includes('mlbb') || service.includes('legend')) {
 
     return { game_key: 'mlbb', variation_id };
   }
-  // 4. TELEGRAM PREMIUM
+
   if (service.includes('tg') || service.includes('telegram')) {
     let variation_id = 'premium_3';
     if (product.includes('12')) variation_id = 'premium_12';
@@ -69,39 +65,51 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const playerIdRaw = body.targetId || body.playerId || body.player_id || body.username || body.userId || body.user_id;
+    // 1. Проверка подлинности Telegram initData
+    const { initData } = body;
+    const authResult = debugVerifyTelegramInitData(initData);
+
+    if (!authResult.user) {
+      return NextResponse.json(
+        { error: `Ошибка авторизации: ${authResult.reason}` },
+        { status: 401 }
+      );
+    }
+
+    const telegramId = authResult.user.id;
+    const playerIdRaw = body.targetId || body.playerId || body.player_id || body.username;
     const playerId = String(playerIdRaw || '').trim();
 
     if (!playerId) {
       return NextResponse.json({ error: 'Укажите Player ID' }, { status: 400 });
     }
 
-    // --- ДОБАВЛЕНО: Проверка баланса перед запросом ---
-    const telegramId = Number(body.userId || body.telegramId || body.telegram_id);
     const price = Number(body.price || 0);
-
-    if (telegramId && price > 0) {
-      const user = await getOrCreateUser(telegramId);
-      const userBalance = Number(user?.balance ?? 0);
-
-      if (userBalance < price) {
-        return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
-      }
-    }
-    // ------------------------------------------------
-
     const service = body.service || '';
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
-    const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
+    // 2. АТОМАРНОЕ СПИСАНИЕ В SUPABASE (Защита от race condition)
+    let createdOrder: any = null;
 
+    if (price > 0) {
+      try {
+        createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
+      } catch (dbErr: any) {
+        if (dbErr.message?.includes('INSUFFICIENT_BALANCE')) {
+          return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
+        }
+        return NextResponse.json({ error: `Ошибка базы данных: ${dbErr.message}` }, { status: 400 });
+      }
+    }
+
+    // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN
+    const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
-    // Формируем payload по ровному маркеру API v2
     const payerpinPayload: Record<string, any> = {
-      game_key: game_key,
-      variation_id: variation_id,
+      game_key,
+      variation_id,
       player_id: playerId,
     };
 
@@ -125,26 +133,24 @@ export async function POST(request: Request) {
 
     const data = await response.json();
 
+    // 4. ЕСЛИ PAYERPIN ОШИБСЯ — АВТОМАТИЧЕСКИ ВОЗВРАЩАЕМ ДЕНЬГИ
     if (!response.ok || data.ok === false) {
+      if (createdOrder?.id) {
+        await refundOrder(createdOrder.id);
+      }
       const errMsg = data.error?.message || data.message || JSON.stringify(data);
       return NextResponse.json(
-        { error: `Ошибка Payerpin: ${errMsg}` },
+        { error: `Ошибка Payerpin: ${errMsg}. Pulingiz qaytarildi.` },
         { status: response.status || 400 }
       );
     }
 
-    // --- ДОБАВЛЕНО: Списание денег из базы после успешной покупки ---
-    let newBalance = undefined;
-    if (telegramId && price > 0) {
-      try {
-        newBalance = await deductBalance(telegramId, price);
-      } catch (err) {
-        console.error("Ошибка при списании баланса:", err);
-      }
+    // 5. УСПЕХ — Помечаем заказ как 'completed'
+    if (createdOrder?.id) {
+      await completeOrder(createdOrder.id);
     }
-    // ----------------------------------------------------------------
 
-    return NextResponse.json({ success: true, order: data, newBalance });
+    return NextResponse.json({ success: true, order: data });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
