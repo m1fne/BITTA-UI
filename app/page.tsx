@@ -830,20 +830,7 @@ const handleOpenShop = (type: ShopType) => {
                     <span style={styles.arrowRight}><Icons.ChevronRight /></span>
                   </button>
 
-                  <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("study"); }}>
-                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
-                      <img 
-                        src="/oqish.png" 
-                        alt="O'qish va Imtihonlar" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      />
-                    </div>
-                    <div style={styles.categoryTextWrap}>
-                      <span style={styles.categoryTitle}>O'qish va Imtihonlar</span>
-                      <span style={styles.categorySub}>IELTS, CEFR, Pravaga tayyorgarlik</span>
-                    </div>
-                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                  </button>
+
 
 
                   <button 
@@ -1066,6 +1053,26 @@ const handleOpenShop = (type: ShopType) => {
       <div style={styles.categoryTextWrap}>
         <span style={styles.categoryTitle}>Snake O'yini</span>
         <span style={styles.categorySub}>Vaqt o'tkazish uchun mini-o'yin</span>
+      </div>
+      <span style={styles.arrowRight}><Icons.ChevronRight /></span>
+    </button>
+
+    {/* КАРТОЧКА O'QISH VA IMTIHONLAR */}
+    <button 
+      style={styles.bigTile} 
+      className="bt-tile" 
+      onClick={() => { haptic("light"); setActiveView("study"); }}
+    >
+      <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
+        <img 
+          src="/oqish.png" 
+          alt="O'qish va Imtihonlar" 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+        />
+      </div>
+      <div style={styles.categoryTextWrap}>
+        <span style={styles.categoryTitle}>O'qish va Imtihonlar</span>
+        <span style={styles.categorySub}>IELTS, CEFR, Pravaga tayyorgarlik</span>
       </div>
       <span style={styles.arrowRight}><Icons.ChevronRight /></span>
     </button>
