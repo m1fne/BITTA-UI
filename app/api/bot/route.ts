@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const callbackId = cb.id;
     const chatId = cb.message?.chat?.id;
     const messageId = cb.message?.message_id;
-    const fromId = cb.from?.id;
+    const fromId = Number(cb.from?.id);
 
     // Проверка прав админа
     const adminIds = (process.env.ADMIN_TELEGRAM_IDS || "")
@@ -32,65 +32,66 @@ export async function POST(req: NextRequest) {
       .filter(Boolean);
 
     if (adminIds.length > 0 && !adminIds.includes(fromId)) {
-      await answerCallbackQuery(callbackId, "⛔ У вас нет прав!", true);
+      await answerCallbackQuery(callbackId, "⛔ Sizda admin huquqi yo'q!", true);
       return NextResponse.json({ ok: true });
     }
 
-    // Обработка кнопок пополнения
     if (data.startsWith("dep:")) {
       const [_, action, depositId] = data.split(":");
-      
+
       try {
         const deposit = await getDeposit(depositId);
 
         if (!deposit) {
-          await answerCallbackQuery(callbackId, "Заявка не найдена!", true);
+          await answerCallbackQuery(callbackId, "So'rov topilmadi!", true);
           return NextResponse.json({ ok: true });
         }
 
-        const formattedAmount = Number(deposit.amount).toLocaleString("ru-RU");
+        const formattedAmount = Number(deposit.amount).toLocaleString("uz-UZ");
 
         if (action === "approve") {
+          // 1. Атомарное зачисление средств в PostgreSQL
           await approveDeposit(depositId);
 
-          // Обновляем сообщение у админа
+          // 2. Обновление карточки админа
           await editMessageText(
             chatId,
             messageId,
-            `✅ <b>ОДОБРЕНО</b>\n💰 Сумма: <b>${formattedAmount} сум</b>\n🆔 Игрок: <code>${deposit.user_id}</code>`
+            `✅ <b>TASDIQLANDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
           );
 
-          // Пишем пользователю
+          // 3. Сообщение пользователю в личку на узбекском
           await sendMessage(
             deposit.user_id,
-            `🎉 <b>Ваш баланс пополнен на ${formattedAmount} сум!</b>`
+            `🎉 <b>Hisobingiz muvaffaqiyatli to'ldirildi!</b>\n\n💰 Qo'shildi: <b>${formattedAmount} so'm</b>`
           );
 
-          await answerCallbackQuery(callbackId, "Успешно одобрено ✅");
+          await answerCallbackQuery(callbackId, "To'lov tasdiqlandi ✅");
         } else if (action === "reject") {
+          // 1. Отклонение в базе
           await rejectDeposit(depositId);
 
-          // Обновляем сообщение у админа
+          // 2. Обновление карточки админа
           await editMessageText(
             chatId,
             messageId,
-            `❌ <b>ОТКЛОНЕНО</b>\n💰 Сумма: <b>${formattedAmount} сум</b>\n🆔 Игрок: <code>${deposit.user_id}</code>`
+            `❌ <b>RAD ETILDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
           );
 
-          // Пишем пользователю
+          // 3. Сообщение пользователю
           await sendMessage(
             deposit.user_id,
-            `❌ <b>Заявка на пополнение (${formattedAmount} сум) отклонена.</b>`
+            `❌ <b>To'lov so'rovingiz rad etildi (${formattedAmount} so'm).</b>`
           );
 
-          await answerCallbackQuery(callbackId, "Заявка отклонена ❌");
+          await answerCallbackQuery(callbackId, "So'rov rad etildi ❌");
         }
       } catch (err: any) {
         const msg = err?.message || "";
-        const isProcessed = msg.includes("ALREADY_PROCESSED");
+        const isProcessed = msg.includes("ALREADY_PROCESSED") || msg.includes("DEPOSIT_ALREADY_DECIDED");
         await answerCallbackQuery(
           callbackId,
-          isProcessed ? "Заявка уже обработана!" : "Ошибка БД",
+          isProcessed ? "Bu so'rov allaqachon ko'rib chiqilgan!" : "Xatolik yuz berdi",
           true
         );
       }
@@ -98,8 +99,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Bot Route Error:", err);
-    // САМОЕ ГЛАВНОЕ: Telegram ВСЕГДА получает 200 OK!
+    console.error("Bot Webhook Error:", err);
     return NextResponse.json({ ok: true });
   }
 }
