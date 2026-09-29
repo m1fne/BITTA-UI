@@ -72,43 +72,25 @@ export async function getDeposit(id: string) {
   return data;
 }
 
+// Вызываем вашу SQL-функцию approve_deposit(p_deposit_id)
 export async function approveDeposit(id: string) {
-  const deposit = await getDeposit(id);
-  if (!deposit || deposit.status !== "pending") throw new Error("ALREADY_DECIDED");
+  const { error } = await supabase.rpc("approve_deposit", {
+    p_deposit_id: id,
+  });
 
-  const tgId = Number(deposit.user_id);
-  const user = await getOrCreateUser(tgId);
-
-  // Переводим статус депозита в approved
-  const { error: depError } = await supabase
-    .from("deposits")
-    .update({ status: "approved" })
-    .eq("id", id);
-
-  if (depError) throw depError;
-
-  // Безопасное начисление баланса без перезаписи
-  const { data: updatedUsers, error: updateError } = await supabase
-    .from("users")
-    .update({ balance: Number(user.balance ?? 0) + Number(deposit.amount) })
-    .eq("telegram_id", tgId)
-    .select();
-
-  if (updateError || !updatedUsers?.length) {
-    console.error("❌ Ошибка при пополнении баланса:", updateError);
-    throw new Error("USER_BALANCE_UPDATE_FAILED");
-  }
+  if (error) throw new Error(error.message);
 }
 
+// Вызываем вашу SQL-функцию reject_deposit(p_deposit_id)
 export async function rejectDeposit(id: string) {
-  const deposit = await getDeposit(id);
-  if (!deposit || deposit.status !== "pending") throw new Error("ALREADY_DECIDED");
+  const { error } = await supabase.rpc("reject_deposit", {
+    p_deposit_id: id,
+  });
 
-  const { error } = await supabase.from("deposits").update({ status: "rejected" }).eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
-// --- ЗАКАЗЫ (ИСПОЛЬЗУЕМ АТОМАРНЫЕ SQL-ФУНКЦИИ) ---
+// --- ЗАКАЗЫ И ВАКАНСИИ ---
 
 export async function purchaseWithBalance(
   userId: number,
@@ -150,8 +132,6 @@ export async function getOrder(id: string) {
   if (error) return null;
   return data;
 }
-
-// --- ВАКАНСИИ ---
 
 export async function getVacancy(id: string) {
   const { data, error } = await supabase.from("vacancies").select("*").eq("id", id).single();

@@ -10,29 +10,20 @@ function isFromTelegram(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Проверяем secret-токен вебхука
     if (!isFromTelegram(req)) {
       return NextResponse.json({ ok: false }, { status: 401 });
     }
 
-    // 2. Игнорируем multipart/form-data запросы (они не могут быть от webhook)
     const contentType = req.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) {
       return NextResponse.json({ ok: true });
     }
 
-    // 3. Безопасное чтение JSON (защита от ошибок парсинга)
-    let update: any = null;
-    try {
-      update = await req.json();
-    } catch (e) {
-      return NextResponse.json({ ok: true });
-    }
-
+    const update = await req.json().catch(() => null);
     const cb = update?.callback_query;
+
     if (!cb) return NextResponse.json({ ok: true });
 
-    // Динамический импорт модулей
     const db = await import("@/lib/db");
     const tg = await import("@/lib/telegram");
 
@@ -48,7 +39,6 @@ export async function POST(req: NextRequest) {
     const hasPhoto: boolean = Boolean(cb.message?.photo);
     const data: string = cb.data ?? "";
 
-    // Проверка прав администратора
     if (ADMIN_IDS.length > 0 && !ADMIN_IDS.includes(fromId)) {
       await tg.answerCallbackQuery(cb.id, "Bu tugma faqat admin uchun", true);
       return NextResponse.json({ ok: true });
@@ -67,27 +57,29 @@ export async function POST(req: NextRequest) {
 
         if (action === "approve") {
           await db.approveDeposit(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `✅ <b>Tasdiqlandi</b>\n💰 +${deposit.amount.toLocaleString("ru-RU")} so'm`);
-          await tg.sendMessage(deposit.user_id, `✅ Balansingiz ${deposit.amount.toLocaleString("ru-RU")} so'mga to'ldirildi!`);
+          await tg.editDecision(chatId, messageId, hasPhoto, `✅ <b>Tasdiqlandi</b>\n💰 +${Number(deposit.amount).toLocaleString("ru-RU")} so'm`);
+          await tg.sendMessage(deposit.user_id, `✅ Balansingiz ${Number(deposit.amount).toLocaleString("ru-RU")} so'mga to'ldirildi!`);
           await tg.answerCallbackQuery(cb.id, "Tasdiqlandi ✅");
         } else if (action === "reject") {
           await db.rejectDeposit(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `❌ <b>Rad etildi</b>\n💰 ${deposit.amount.toLocaleString("ru-RU")} so'm`);
-          await tg.sendMessage(deposit.user_id, `❌ To'ldirish so'rovingiz (${deposit.amount.toLocaleString("ru-RU")} so'm) rad etildi.`);
+          await tg.editDecision(chatId, messageId, hasPhoto, `❌ <b>Rad etildi</b>\n💰 ${Number(deposit.amount).toLocaleString("ru-RU")} so'm`);
+          await tg.sendMessage(deposit.user_id, `❌ To'ldirish so'rovingiz (${Number(deposit.amount).toLocaleString("ru-RU")} so'm) rad etildi.`);
           await tg.answerCallbackQuery(cb.id, "Rad etildi");
         }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "UNKNOWN";
+      } catch (e: any) {
+        const message = e?.message || "";
+        const isAlreadyDecided = message.includes("DEPOSIT_ALREADY_DECIDED") || message.includes("ALREADY_DECIDED");
         await tg.answerCallbackQuery(
-          cb.id, 
-          message.includes("ALREADY_DECIDED") ? "Bu so'rov allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi", 
+          cb.id,
+          isAlreadyDecided ? "Bu so'rov allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi",
           true
         );
       }
+
       return NextResponse.json({ ok: true });
     }
 
-    // ===== Заказы (PUBG/Free Fire/Steam/Premium) =====
+    // ===== Заказы =====
     if (domain === "ord") {
       try {
         const order = await db.getOrder(id);
@@ -104,17 +96,18 @@ export async function POST(req: NextRequest) {
         } else if (action === "refund") {
           await db.refundOrder(id);
           await tg.editDecision(chatId, messageId, hasPhoto, `❌ <b>Bekor qilindi</b> — buyurtma #${order.order_no}, mablag' qaytarildi`);
-          await tg.sendMessage(order.user_id, `❌ Buyurtmangiz (${order.product_name}) bekor qilindi, ${order.price.toLocaleString("ru-RU")} so'm hisobingizga qaytarildi.`);
+          await tg.sendMessage(order.user_id, `❌ Buyurtmangiz (${order.product_name}) bekor qilindi, ${Number(order.price).toLocaleString("ru-RU")} so'm hisobingizga qaytarildi.`);
           await tg.answerCallbackQuery(cb.id, "Bekor qilindi, pul qaytarildi");
         }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "UNKNOWN";
+      } catch (e: any) {
+        const message = e?.message || "";
         await tg.answerCallbackQuery(
-          cb.id, 
-          message.includes("ALREADY_DECIDED") ? "Bu buyurtma allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi", 
+          cb.id,
+          message.includes("ALREADY_DECIDED") ? "Bu buyurtma allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi",
           true
         );
       }
+
       return NextResponse.json({ ok: true });
     }
 
@@ -135,6 +128,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         await tg.answerCallbackQuery(cb.id, "Xatolik yuz berdi", true);
       }
+
       return NextResponse.json({ ok: true });
     }
 
