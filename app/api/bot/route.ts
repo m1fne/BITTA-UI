@@ -14,14 +14,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false }, { status: 401 });
     }
 
-    const contentType = req.headers.get("content-type") || "";
-    if (contentType.includes("multipart/form-data")) {
+    // Безопасно получаем сырой текст запроса, не вызывая req.json()
+    const rawBody = await req.text().catch(() => "");
+    if (!rawBody) return NextResponse.json({ ok: true });
+
+    let update: any = null;
+    try {
+      update = JSON.parse(rawBody);
+    } catch {
+      // Если пришёл не JSON (например, multipart с дефисами '--'), просто выходим
       return NextResponse.json({ ok: true });
     }
 
-    const update = await req.json().catch(() => null);
     const cb = update?.callback_query;
-
     if (!cb) return NextResponse.json({ ok: true });
 
     const db = await import("@/lib/db");
