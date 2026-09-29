@@ -1,179 +1,130 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
-import { createDeposit, getBalance, getDeposit, getOrCreateUser } from "@/lib/db";
+import { createClient } from "@supabase/supabase-js";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET; // Секретный ключ вебхука
+const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_IDS || "")
+  .split(",")
+  .map((id) => id.trim());
 
-function parseTelegramInitData(initData: string) {
-  if (!initData) return null;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  try {
-    const urlParams = new URLSearchParams(initData);
-    const userStr = urlParams.get("user");
-    if (!userStr) return null;
+// Регулярное выражение для проверки UUID (защита от мусорных данных)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    const user = JSON.parse(userStr);
-    const hash = urlParams.get("hash");
-
-    if (TELEGRAM_BOT_TOKEN && hash) {
-      urlParams.delete("hash");
-      const dataCheckString = Array.from(urlParams.entries())
-        .map(([key, val]) => `${key}=${val}`)
-        .sort()
-        .join("\n");
-
-      const secretKey = crypto
-        .createHmac("sha256", "WebAppData")
-        .update(TELEGRAM_BOT_TOKEN)
-        .digest();
-
-      const calculatedHash = crypto
-        .createHmac("sha256", secretKey)
-        .update(dataCheckString)
-        .digest("hex");
-
-      if (calculatedHash !== hash) {
-        console.warn("⚠️ Хэш initData не совпал, используем dev-режим");
-      }
-    }
-
-    return user;
-  } catch (err) {
-    console.error("❌ Ошибка парсинга initData:", err);
-    return null;
-  }
+async function answerCallbackQuery(callbackQueryId: string, text: string, showAlert = false) {
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text: text,
+      show_alert: showAlert,
+    }),
+  });
 }
 
-// 1. GET — считывание баланса и статуса текущей заявки
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const initData = searchParams.get("initData");
-    const depositId = searchParams.get("id");
+async function editMessageCaptionOrText(chatId: number, messageId: number, newText: string, isPhoto: boolean) {
+  const method = isPhoto ? "editMessageCaption" : "editMessageText";
+  const bodyKey = isPhoto ? "caption" : "text";
 
-    if (!initData) {
-      return NextResponse.json({ error: "NO_INIT_DATA", balance: 0 }, { status: 400 });
-    }
-
-    const tgUser = parseTelegramInitData(initData);
-    if (!tgUser || !tgUser.id) {
-      return NextResponse.json({ error: "INVALID_USER", balance: 0 }, { status: 401 });
-    }
-
-    const tgId = Number(tgUser.id);
-    await getOrCreateUser(tgId, tgUser.username);
-
-    const balance = await getBalance(tgId);
-
-    let deposit = null;
-    if (depositId) {
-      deposit = await getDeposit(depositId);
-    }
-
-    return NextResponse.json({
-      ok: true,
-      balance,
-      deposit,
-    });
-  } catch (err: any) {
-    console.error("❌ Ошибка в GET /api/deposit:", err);
-    return NextResponse.json({ error: err.message, balance: 0 }, { status: 500 });
-  }
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      [bodyKey]: newText,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [] },
+    }),
+  });
 }
-
-// POST — создание новой заявки на пополнение (поддерживает и FormData с чеком, и JSON)
-// app/api/deposit/route.ts
 
 export async function POST(req: Request) {
   try {
-    let initData = "";
-    let amount = 0;
-    let receiptFile: File | null = null;
-
-    const contentType = req.headers.get("content-type") || "";
-
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      initData = (formData.get("initData") as string) || "";
-      amount = Number(formData.get("amount") || 0);
-      receiptFile = formData.get("receipt") as File | null;
-    } else {
-      const body = await req.json().catch(() => ({}));
-      initData = body.initData || "";
-      amount = Number(body.amount || 0);
+    // 🛡️ УРОВЕНЬ ЗАЩИТЫ 1: Проверка секретного заголовка от Telegram
+    const incomingSecret = req.headers.get("x-telegram-bot-api-secret-token");
+    if (WEBHOOK_SECRET && incomingSecret !== WEBHOOK_SECRET) {
+      console.warn("🚨 [SECURITY ALERT] Несанкционированная попытка вызова /api/bot!");
+      return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    if (!initData) {
-      return NextResponse.json({ error: "NO_INIT_DATA" }, { status: 400 });
-    }
+    const body = await req.json();
 
-    const tgUser = parseTelegramInitData(initData);
-    if (!tgUser || !tgUser.id) {
-      return NextResponse.json({ error: "INVALID_USER" }, { status: 401 });
-    }
+    if (body.callback_query) {
+      const callback = body.callback_query;
+      const callbackId = callback.id;
+      const data = String(callback.data || "");
+      const userId = String(callback.from?.id || "");
+      const chatId = callback.message?.chat?.id;
+      const messageId = callback.message?.message_id;
+      const isPhoto = !!callback.message?.photo;
+      const originalText = callback.message?.caption || callback.message?.text || "";
 
-    const tgId = Number(tgUser.id);
-    const numAmount = Number(amount);
+      // 🛡️ УРОВЕНЬ ЗАЩИТЫ 2: Проверка прав Админа
+      if (ADMIN_IDS.length > 0 && !ADMIN_IDS.includes(userId)) {
+        console.warn(`🚨 [SECURITY ALERT] Пользователь ${userId} попытался нажать админ-кнопку!`);
+        await answerCallbackQuery(callbackId, "⛔ Sizda ushbu amalni bajarish uchun huquq yo'q!", true);
+        return NextResponse.json({ ok: true });
+      }
 
-    if (!numAmount || numAmount <= 0) {
-      return NextResponse.json({ error: "INVALID_AMOUNT" }, { status: 400 });
-    }
+      if (data.startsWith("dep:approve:") || data.startsWith("dep:reject:")) {
+        const [_, action, depositId] = data.split(":");
 
-    // 1. Создаём депозит в Supabase
-    const deposit = await createDeposit(tgId, numAmount);
-
-    // Берем ID админа из переменной ADMIN_TELEGRAM_IDS
-    const adminId = (process.env.ADMIN_TELEGRAM_IDS || "").split(",")[0]?.trim();
-
-    // 2. Отправляем уведомление админу в формате, который понимает твой bot/route.ts
-    if (TELEGRAM_BOT_TOKEN && adminId && deposit) {
-      try {
-        const usernameText = tgUser.username ? `@${tgUser.username}` : `ID: ${tgId}`;
-        const caption = `📩 <b>Yangi to'ldirish so'rovi</b>\n👤 Foydalanuvchi: ${usernameText}\n💰 Summa: ${numAmount.toLocaleString("ru-RU")} so'm`;
-        
-        // ВАЖНО: Формат dep:approve:ID и dep:reject:ID под твой bot/route.ts
-        const replyMarkup = {
-          inline_keyboard: [
-            [
-              { text: `✅ Tasdiqlash (+${numAmount})`, callback_data: `dep:approve:${deposit.id}` },
-              { text: "❌ Rad etish", callback_data: `dep:reject:${deposit.id}` },
-            ],
-          ],
-        };
-
-        if (receiptFile && receiptFile.size > 0) {
-          const tgForm = new FormData();
-          tgForm.append("chat_id", adminId);
-          tgForm.append("caption", caption);
-          tgForm.append("parse_mode", "HTML");
-          tgForm.append("reply_markup", JSON.stringify(replyMarkup));
-          tgForm.append("photo", receiptFile);
-
-          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-            method: "POST",
-            body: tgForm,
-          });
-        } else {
-          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: adminId,
-              text: caption,
-              parse_mode: "HTML",
-              reply_markup: replyMarkup,
-            }),
-          });
+        // 🛡️ УРОВЕНЬ ЗАЩИТЫ 3: Проверка формата UUID
+        if (!depositId || !UUID_REGEX.test(depositId)) {
+          await answerCallbackQuery(callbackId, "❌ Noto'g'ri ID формати!", true);
+          return NextResponse.json({ ok: true });
         }
-      } catch (telegramErr) {
-        console.error("⚠️ Не удалось отправить сообщение админу:", telegramErr);
+
+        if (action === "approve") {
+          // 🛡️ УРОВЕНЬ ЗАЩИТЫ 4: Вызов атомарной функции PostgreSQL (FOR UPDATE)
+          const { error } = await supabase.rpc("approve_deposit", {
+            p_deposit_id: depositId,
+          });
+
+          if (error) {
+            console.error("❌ Ошибка одобрения депозита:", error);
+            const isAlreadyDecided = error.message.includes("DEPOSIT_ALREADY_DECIDED");
+            const alertText = isAlreadyDecided
+              ? "⚠️ Bu so'rov allaqachon ko'rib chiqilgan!"
+              : "❌ Xatolik yuz berdi!";
+            await answerCallbackQuery(callbackId, alertText, true);
+            return NextResponse.json({ ok: true });
+          }
+
+          await answerCallbackQuery(callbackId, "✅ To'lov tasdiqlandi va balans to'ldirildi!");
+          const updatedCaption = `${originalText}\n\n<b>✅ TASDIQLANDI</b>`;
+          await editMessageCaptionOrText(chatId, messageId, updatedCaption, isPhoto);
+
+        } else if (action === "reject") {
+          const { error } = await supabase.rpc("reject_deposit", {
+            p_deposit_id: depositId,
+          });
+
+          if (error) {
+            console.error("❌ Ошибка отклонения депозита:", error);
+            const isAlreadyDecided = error.message.includes("DEPOSIT_ALREADY_DECIDED");
+            const alertText = isAlreadyDecided
+              ? "⚠️ Bu so'rov allaqachon ko'rib chiqilgan!"
+              : "❌ Xatolik yuz berdi!";
+            await answerCallbackQuery(callbackId, alertText, true);
+            return NextResponse.json({ ok: true });
+          }
+
+          await answerCallbackQuery(callbackId, "❌ So'rov rad etildi!");
+          const updatedCaption = `${originalText}\n\n<b>❌ RAD ETILDI</b>`;
+          await editMessageCaptionOrText(chatId, messageId, updatedCaption, isPhoto);
+        }
       }
     }
 
-    return NextResponse.json({ ok: true, deposit });
+    return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error("❌ Ошибка в POST /api/deposit:", err);
-    return NextResponse.json({ error: err.message || "SERVER_ERROR" }, { status: 500 });
+    console.error("❌ Ошибка в bot/route.ts:", err);
+    return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
   }
 }
