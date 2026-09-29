@@ -1,7 +1,7 @@
 "use client";
-import TopSection from './TopSection';
-import TangaGame from "./tanga";
-import SnakeGame from './SnakeGame';
+import WalletView from "./components/wallet";
+import HistoryView from "./components/history";
+
 
 import { useState, useEffect, ChangeEvent } from "react";
 
@@ -35,7 +35,7 @@ declare global {
 }
 
 type ShopType = "pubg" | "freefire" | "premium" | "mlbb";
-type EduType = "cefr" | "prava";
+
 
 // ===================== ДАННЫЕ =====================
 
@@ -298,10 +298,7 @@ const shopIcons: Record<ShopType, () => JSX.Element> = {
   ),
 };
 
-const eduIcons: Record<EduType, () => JSX.Element> = {
-  cefr: Icons.Book,
-  prava: Icons.Pravaga,
-};
+
 
 // ===================== КОМПОНЕНТ =====================
 
@@ -310,17 +307,16 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [userBalance, setUserBalance] = useState(0);
 
-  // Навигация: home -> одна из категорий -> profile. Каждая — отдельный полноэкранный вид.
-  const [activeView, setActiveView] = useState<"home" | "market" | "study" | "jobs" | "profile">("home");
-  // Заглушка выбора языка в профиле — реального перевода пока нет, только визуальный выбор.
-  const [uiLanguage, setUiLanguage] = useState<"uz" | "ru" | "en">("uz");
+  // ✅ Безопасное получение пользователя Telegram (не ломает Next.js на сервере)
+  const u = typeof window !== "undefined" 
+    ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user 
+    : null;
 
-  // BITTA AI (Gemini)
-  const [isAiOpen, setIsAiOpen] = useState(false);
-  const [aiMessages, setAiMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
-  const [aiInput, setAiInput] = useState("");
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
+  // Навигация: home -> market -> wallet -> history -> profile
+  const [activeView, setActiveView] = useState<"home" | "market" | "wallet" | "history" | "profile">("home");
+  
+  // Выбор языка в профиле
+  const [uiLanguage, setUiLanguage] = useState<"uz" | "ru" | "en">("uz");
 
   // Покупка в магазине (списание с баланса)
   const [buyError, setBuyError] = useState("");
@@ -332,29 +328,23 @@ export default function Home() {
   const [topUpReceiptName, setTopUpReceiptName] = useState("");
   const [topUpReceiptFile, setTopUpReceiptFile] = useState<File | null>(null);
   const [topUpCopied, setTopUpCopied] = useState(false);
-  // idle -> submitting -> pending (ждём решения админа в Telegram) -> approved | rejected | error
   const [topUpStatus, setTopUpStatus] = useState<"idle" | "submitting" | "pending" | "approved" | "rejected" | "error">("idle");
   const [topUpError, setTopUpError] = useState("");
   const [depositId, setDepositId] = useState<string | null>(null);
 
-  // БАК 1: Маркет
+  // МАРКЕТ / МАГАЗИН
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [activeShopType, setActiveShopType] = useState<ShopType | null>(null);
   const [shopStep, setShopStep] = useState(1); // 1 tanlash, 2 malumot, 3 tolov, 4 tayyor
   const [selectedPack, setSelectedPack] = useState<{ name: string; price: string } | null>(null);
   const [userCredential, setUserCredential] = useState("");
 
-  // БАК 2: Обучение
-  const [isEduOpen, setIsEduOpen] = useState(false);
-  const [eduType, setEduType] = useState<EduType | null>(null);
+  // МОДАЛКИ FAQ И ОФЕРТЫ
+  const [isFaqOpen, setIsFaqOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
 
-  // 1. Состояния для открытия модалок FAQ и Оферты (добавьте к остальным useState)
-const [isFaqOpen, setIsFaqOpen] = useState(false);
-const [isTermsOpen, setIsTermsOpen] = useState(false);
-
-// 2. Функции для их открытия
-const handleOpenFaq = () => setIsFaqOpen(true);
-const handleOpenTerms = () => setIsTermsOpen(true);
+  const handleOpenFaq = () => setIsFaqOpen(true);
+  const handleOpenTerms = () => setIsTermsOpen(true);
 
 
 
@@ -517,42 +507,6 @@ const loadBalance = async () => {
     }
   };
 
-  // BITTA AI — отправка сообщения на бэкенд, который сам ходит в Gemini
-  const handleSendAi = async () => {
-    const text = aiInput.trim();
-    if (!text || isAiLoading) return;
-
-    haptic("light");
-    const nextMessages = [...aiMessages, { role: "user" as const, text }];
-    setAiMessages(nextMessages);
-    setAiInput("");
-    setAiError("");
-    setIsAiLoading(true);
-
-    try {
-      const res = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          initData: getInitData(),
-          message: text,
-          // на бэкенд шлём только последние сообщения — так меньше токенов уходит на каждый запрос
-          history: nextMessages.slice(-10, -1),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.reply) {
-        setAiError(`Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`);
-        return;
-      }
-      setAiMessages((prev) => [...prev, { role: "assistant", text: data.reply }]);
-    } catch (e) {
-      setAiError(`Tarmoq xatosi: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
   // МАГАЗИН
 const handleOpenShop = (type: ShopType) => {
     haptic("light");
@@ -626,11 +580,7 @@ const handleBuy = async () => {
     }
   };
 
-  const handleOpenEdu = (type: EduType) => {
-    haptic("light");
-    setEduType(type);
-    setIsEduOpen(true);
-  };
+
 
 
   // Поиск по всему приложению
@@ -639,9 +589,6 @@ const handleBuy = async () => {
     { id: "g-ff", group: "O'yin", theme: themes.gold, icon: Icons.Diamond, title: "Free Fire Almazlar", desc: "Almaz to'ldirish", keywords: ["free fire", "ff", "almaz", "diamond"], action: () => handleOpenShop("freefire") },
    
     { id: "g-prem", group: "Xizmat", theme: themes.violet, icon: Icons.Premium, title: "Telegram Premium", desc: "Tezkor obuna", keywords: ["premium", "telegram", "tg"], action: () => handleOpenShop("premium") },
-    { id: "e-ielts", group: "Ta'lim", theme: themes.teal, icon: Icons.Book, title: "IELTS.GG", desc: "IELTS imtihoniga tayyorgarlik", keywords: ["ielts", "ingliz", "til"], action: () => openLinkInside("https://ielts.gg") },
-    { id: "e-cefr", group: "Ta'lim", theme: themes.teal, icon: Icons.Book, title: "CEFR Imtihonlari", desc: "Milliy sertifikat materiallari", keywords: ["cefr", "sertifikat"], action: () => handleOpenEdu("cefr") },
-    { id: "e-prava", group: "Ta'lim", theme: themes.gold, icon: Icons.Pravaga, title: "Pravaga Tayyorgarlik", desc: "YHQ va GAI testlari", keywords: ["prava", "gai", "yhq", "avtomobil"], action: () => handleOpenEdu("prava") },
     ...adPartners.map((ad) => ({ id: `ad-${ad.id}`, group: ad.badge, theme: themes.gold, icon: Icons.Sparkle, title: ad.title, desc: ad.desc, keywords: [ad.category, ad.title.toLowerCase()], action: () => openLinkInside(ad.link) })),
   ];
 
@@ -742,373 +689,200 @@ const handleBuy = async () => {
       </div>
 
       <div style={styles.content}>
-        {/* ХЕДЕР */}
-        <header style={styles.header}>
-          {activeView === "home" ? (
-            <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("profile"); }}>
-              <Icons.User />
-            </button>
-          ) : (
-            <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("home"); }}>
-              <Icons.ChevronLeft />
-            </button>
-          )}
+{/* ХЕДЕР */}
+<header style={styles.header}>
+  {activeView === "home" ? (
+    <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("profile"); }}>
+      <Icons.User />
+    </button>
+  ) : (
+    <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("home"); }}>
+      <Icons.ChevronLeft />
+    </button>
+  )}
 
-          <div style={styles.logoWrap}>
-            <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad }}>
-              <Icons.Sparkle />
-            </span>
-            <span className="bt-display" style={styles.logoText}>
-              {activeView === "home" && "bitta"}
-              {activeView === "market" && "O'yin & Market"}
-              {activeView === "study" && "Ta'lim"}
-              {activeView === "profile" && "Profil"}
-            </span>
-          </div>
+  <div style={styles.logoWrap}>
+    <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad }}>
+      <Icons.Sparkle />
+    </span>
+    <span className="bt-display" style={styles.logoText}>
+      {activeView === "home" && "bitta"}
+      {activeView === "market" && "O'yin & Market"}
+      {activeView === "wallet" && "Hamyon"}
+      {activeView === "history" && "Tarix"}
+      {activeView === "profile" && "Profil"}
+    </span>
+  </div>
 
-          <div style={{ flex: 1 }} />
+  <div style={{ flex: 1 }} />
 
-          <button style={styles.topUpHeaderBtn} className="bt-primary-btn" onClick={handleOpenTopUp}>
-            <Icons.Wallet />
-            <span>{userBalance.toLocaleString("uz-UZ")} UZS</span>
-          </button>
+  {/* КЛИК НА БАЛАНС ОТКРЫВАЕТ МОДАЛКУ ПОПОЛНЕНИЯ */}
+  <button style={styles.topUpHeaderBtn} className="bt-primary-btn" onClick={handleOpenTopUp}>
+    <Icons.Wallet />
+    <span>{userBalance.toLocaleString("uz-UZ")} UZS</span>
+  </button>
 
-          <button style={styles.burgerButton} className="bt-secondary-btn" onClick={() => { haptic("light"); setIsMenuOpen(true); }}>
-            <div style={styles.burgerLine}></div>
-            <div style={{ ...styles.burgerLine, width: "16px" }}></div>
-          </button>
-        </header>
+  <button style={styles.burgerButton} className="bt-secondary-btn" onClick={() => { haptic("light"); setIsMenuOpen(true); }}>
+    <div style={styles.burgerLine}></div>
+    <div style={{ ...styles.burgerLine, width: "16px" }}></div>
+  </button>
+</header>
 
-        {/* ===================== ГЛАВНАЯ ===================== */}
-        {activeView === "home" && (
-          <>
-            <div style={styles.searchWrapperFull}>
-              <div style={styles.searchIcon}><Icons.Search /></div>
-              <input
-                type="text"
-                placeholder="Nima kerak?"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={styles.searchInputFull}
-                className="bt-search-input"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn"><Icons.Close /></button>
-              )}
-            </div>
+{/* ===================== 1. ГЛАВНАЯ ===================== */}
+{activeView === "home" && (
+  <>
+    <div style={styles.searchWrapperFull}>
+      <div style={styles.searchIcon}><Icons.Search /></div>
+      <input
+        type="text"
+        placeholder="Qidiruv"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        style={styles.searchInputFull}
+        className="bt-search-input"
+      />
+      {searchQuery && (
+        <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn"><Icons.Close /></button>
+      )}
+    </div>
 
-            {q !== "" ? (
-              <div style={styles.resultsSection}>
-                <div style={styles.resultsHeader}>Qidiruv natijalari</div>
-                {filteredResults.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {filteredResults.map((item) => (
-                      <div key={item.id} style={styles.resultCard} className="bt-row" onClick={() => runResult(item.action)}>
-                        <div style={{ ...styles.resultIconBadge, background: item.theme.grad, boxShadow: `0 6px 16px ${item.theme.glow}` }}>
-                          <item.icon />
-                        </div>
-                        <div style={styles.resultBody}>
-                          <div style={styles.resultGroup}>{item.group}</div>
-                          <div style={styles.resultTitle}>{item.title}</div>
-                          <div style={styles.resultDesc}>{item.desc}</div>
-                        </div>
-                        <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring</div>
-                )}
-              </div>
-            ) : (
-              <>
-                {/* HERO */}
-                <section style={styles.hero}>
-                  <div style={styles.heroBadge}><Icons.Sparkle /> Bitta ilovada — hammasi</div>
-                  <h1 className="bt-display" style={styles.heroTitle}>Nimadan boshlaymiz?</h1>
-                  <p style={styles.heroSub}>O'yin balansingizni to'ldiring va ko`ngil ochar xizmatlardan foydalaning!</p>
-                </section>
-
-{/* 3 КРУПНЫХ РАЗДЕЛА (Теперь 4 с ТОП-блоком!) */}
-                <div style={styles.categoryList}>
-
-                  {/* 🚀 НАШ НОВЫЙ ТОП БЛОК */}
-                 <TopSection onSelect={() => handleOpenShop("pubg")} />
-
-                  <button style={styles.categoryCard} className="bt-tile" onClick={() => { haptic("light"); setActiveView("market"); }}>
-                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
-                      <img 
-                        src="/games_home.png" 
-                        alt="O'yin & Market" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
-                      />
-                    </div>
-                    <div style={styles.categoryTextWrap}>
-                      <span style={styles.categoryTitle}>O'yin & Market</span>
-                      <span style={styles.categorySub}>PUBG, Free Fire, TG Premium</span>
-                    </div>
-                    <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                  </button>
-
-
-
-
-                  <button 
-                    style={styles.categoryCard} 
-                    className="bt-tile"
-                    onClick={() => { haptic("light"); setActiveView("boshqa"); }}
-                  >
-                    <div style={{ ...styles.categoryIconBadge, padding: 0, overflow: 'hidden' }}>
-                      <img 
-                        src="/boshqa_xizmatlar.png" 
-                        alt="Boshqa xizmatlar" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                      />
-                    </div>
-                    <span style={styles.categoryTextWrap}>
-                      <span style={styles.categoryTitle}>Boshqa xizmatlar</span>
-                      <span style={styles.categorySub}>Barcha qo'shimcha bo'limlar</span>
-                    </span>
-                    <span style={styles.arrowRight}>
-                      <Icons.ChevronRight />
-                    </span>
-                  </button>
+    {searchQuery !== "" ? (
+      <div style={styles.resultsSection}>
+        <div style={styles.resultsHeader}>Qidiruv natijalari</div>
+        {filteredResults.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {filteredResults.map((item) => (
+              <div key={item.id} style={styles.resultCard} className="bt-row" onClick={() => runResult(item.action)}>
+                <div style={{ ...styles.resultIconBadge, background: item.theme.grad, boxShadow: `0 6px 16px ${item.theme.glow}` }}>
+                  <item.icon />
                 </div>
-
-                {/* РЕКЛАМА */}
-                <section style={{ marginBottom: "20px" }}>
-                  <div style={styles.promoCard} className="bt-tile" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
-                    <div style={styles.promoBadge}><Icons.Sparkle /> Reklama xizmati</div>
-                    <div style={styles.promoTitle}>Bitta-da o'z brendingizni e'lon qiling!</div>
-                    <div style={styles.promoDesc}>Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.</div>
-                    <span style={styles.promoLinkBtn}>Murojaat qilish (@bitta_mngr) <Icons.ChevronRight /></span>
-                  </div>
-                </section>
-              </>
-            )}
-          </>
-        )}
-
-
-{/* ===================== O'YIN & MARKET ===================== */}
-{activeView === "market" && (
-  <div style={{
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '10px',
-    padding: '8px 0'
-  }}>
-    {/* PUBG Mobile */}
-    <button 
-      className="bt-tile" 
-      onClick={() => handleOpenShop("pubg")}
-      style={{
-        background: 'rgba(255, 255, 255, 0.05)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '16px',
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        textAlign: 'center'
-      }}
-    >
-      <img 
-        src="/pubg_mobile.jpg" 
-        alt="PUBG Mobile" 
-        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
-      />
-      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>PUBG Mobile</span>
-      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>UC to'ldirish</span>
-    </button>
-
-    {/* Free Fire */}
-    <button 
-      className="bt-tile" 
-      onClick={() => handleOpenShop("freefire")}
-      style={{
-        background: 'rgba(255, 255, 255, 0.05)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '16px',
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        textAlign: 'center'
-      }}
-    >
-      <img 
-        src="/ff_diamonds.jpg" 
-        alt="Free Fire" 
-        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
-      />
-      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>Free Fire</span>
-      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Almazlar</span>
-    </button>
-
-{/* TG Premium */}
-    <button 
-      className="bt-tile" 
-      onClick={() => handleOpenShop("premium")}
-      style={{
-        background: 'rgba(255, 255, 255, 0.05)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '16px',
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        textAlign: 'center'
-      }}
-    >
-      <img 
-        src="/telegram_premium.jpg" 
-        alt="TG Premium" 
-        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
-      />
-      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>TG Premium</span>
-      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Tezkor obuna</span>
-    </button>
-
-    {/* Mobile Legends — Перенесли ВНУТРЬ контейнера */}
-    <button 
-      className="bt-tile" 
-      onClick={() => handleOpenShop("mlbb")}
-      style={{
-        background: 'rgba(255, 255, 255, 0.05)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '16px',
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        textAlign: 'center'
-      }}
-    >
-      <img 
-        src="/mobile_legends.jpg" 
-        alt="Mobile Legends" 
-        style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '12px', marginBottom: '6px' }} 
-      />
-      <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>Mobile Legends</span>
-      <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Almazlar</span>
-    </button>
-
-  </div>
-)}
-        {/* ===================== O'QISH VA IMTIHONLAR ===================== */}
-        {activeView === "study" && (
-          <div style={styles.rowList}>
-            <button style={styles.row} className="bt-row" onClick={() => openLinkInside("https://ielts.gg")}>
-              <div style={{ ...styles.rowIconBadge, background: themes.teal.grad, boxShadow: `0 6px 14px ${themes.teal.glow}` }}>
-                <Icons.Book />
+                <div style={styles.resultBody}>
+                  <div style={styles.resultGroup}>{item.group}</div>
+                  <div style={styles.resultTitle}>{item.title}</div>
+                  <div style={styles.resultDesc}>{item.desc}</div>
+                </div>
+                <span style={styles.arrowRight}><Icons.ChevronRight /></span>
               </div>
-              <div style={styles.rowBody}>
-                <span style={styles.rowTitle}>IELTS.GG</span>
-                <span style={styles.rowSub}>Professional IELTS imtihoniga tayyorgarlik</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-
-            <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("cefr")}>
-              <div style={{ ...styles.rowIconBadge, background: themes.violet.grad, boxShadow: `0 6px 14px ${themes.violet.glow}` }}>
-                <Icons.Book />
-              </div>
-              <div style={styles.rowBody}>
-                <span style={styles.rowTitle}>CEFR Imtihonlari</span>
-                <span style={styles.rowSub}>Milliy sertifikat imtihon materiallari</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
-
-            <button style={styles.row} className="bt-row" onClick={() => handleOpenEdu("prava")}>
-              <div style={{ ...styles.rowIconBadge, background: themes.gold.grad, boxShadow: `0 6px 14px ${themes.gold.glow}` }}>
-                <Icons.Pravaga />
-              </div>
-              <div style={styles.rowBody}>
-                <span style={styles.rowTitle}>Pravaga Tayyorgarlik</span>
-                <span style={styles.rowSub}>Avtomobil imtihoni (GAI) testlari</span>
-              </div>
-              <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-            </button>
+            ))}
           </div>
+        ) : (
+          <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring</div>
         )}
+      </div>
+    ) : (
+      <>
+        {/* HERO / KATALOG */}
+        <section style={{ ...styles.hero, paddingBottom: '4px' }}>
+          <div style={styles.heroBadge}>
+            <Icons.Sparkle /> Bitta ilovada — hammasi
+          </div>
+          <h1 className="bt-display" style={{ ...styles.heroTitle, fontSize: '22px', marginTop: '6px', marginBottom: '0' }}>
+            Katalog
+          </h1>
+        </section>
 
+        {/* ВИТРИНА ИГР И СЕРВИСОВ */}
+        <div style={{ padding: '0 16px', marginTop: '16px', marginBottom: '24px' }}>
+          <div style={{ fontSize: '15px', fontWeight: '700', color: '#FFF', marginBottom: '12px' }}>
+            O'yinlar va Xizmatlar
+          </div>
 
-{/* ===================== BOSHQA XIZMATLAR ===================== */}
-{activeView === "boshqa" && (
-  <div style={styles.bigTileList}>
-    {/* КАРТОЧКА TANGA CLICKER */}
-    <button 
-      style={styles.bigTile} 
-      className="bt-tile" 
-      onClick={() => { haptic("light"); setActiveView("tanga"); }}
-    >
-      <div style={{ ...styles.bigTileIconBadge, background: 'rgba(255, 184, 0, 0.15)', overflow: 'hidden' }}>
-        <img src="/tanga.png" alt="Tanga Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
-      </div>
-      <div style={styles.categoryTextWrap}>
-        <span style={styles.categoryTitle}>Tanga Clicker</span>
-        <span style={styles.categorySub}>Tanga bosing va sovrinlar yuting</span>
-      </div>
-      <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-    </button>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px'
+          }}>
+            {[
+              { id: "pubg", title: "PUBG Mobile", sub: "UC to'ldirish", img: "/pubg_mobile.jpg" },
+              { id: "freefire", title: "Free Fire", sub: "Almazlar", img: "/ff_diamonds.jpg" },
+              { id: "premium", title: "TG Premium", sub: "Tezkor obuna", img: "/telegram_premium.jpg" },
+              { id: "mlbb", title: "Mobile Legends", sub: "Almazlar", img: "/mobile_legends.jpg" },
+            ].map((item) => (
+              <button 
+                key={item.id}
+                className="bt-tile" 
+                onClick={() => {
+                  haptic("light");
+                  handleOpenShop(item.id as any);
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '16px',
+                  padding: '8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
+                <img 
+                  src={item.img} 
+                  alt={item.title} 
+                  style={{ 
+                    width: '100%', 
+                    aspectRatio: '1/1', 
+                    objectFit: 'cover', 
+                    borderRadius: '12px', 
+                    marginBottom: '6px' 
+                  }} 
+                />
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>
+                  {item.title}
+                </span>
+                <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
+                  {item.sub}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-    {/* КАРТОЧКА SNAKE O'YINI */}
-    <button 
-      style={styles.bigTile} 
-      className="bt-tile" 
-      onClick={() => { haptic("light"); setActiveView("snake"); }}
-    >
-      <div style={{ ...styles.bigTileIconBadge, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}>
-        <span style={{ fontSize: '20px' }}>🐍</span>
-      </div>
-      <div style={styles.categoryTextWrap}>
-        <span style={styles.categoryTitle}>Snake O'yini</span>
-        <span style={styles.categorySub}>Vaqt o'tkazish uchun mini-o'yin</span>
-      </div>
-      <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-    </button>
-
-    {/* КАРТОЧКА O'QISH VA IMTIHONLAR */}
-    <button 
-      style={styles.bigTile} 
-      className="bt-tile" 
-      onClick={() => { haptic("light"); setActiveView("study"); }}
-    >
-      <div style={{ ...styles.bigTileIconBadge, padding: 0, overflow: 'hidden' }}>
-        <img 
-          src="/oqish.png" 
-          alt="O'qish va Imtihonlar" 
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-        />
-      </div>
-      <div style={styles.categoryTextWrap}>
-        <span style={styles.categoryTitle}>O'qish va Imtihonlar</span>
-        <span style={styles.categorySub}>IELTS, CEFR, Pravaga tayyorgarlik</span>
-      </div>
-      <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-    </button>
-  </div>
+        {/* РЕКЛАМА */}
+        <section style={{ marginBottom: "20px", padding: "0 16px" }}>
+          <div 
+            className="bt-tile" 
+            onClick={() => openTelegramLink("https://t.me/bitta_mngr")}
+            style={{
+              background: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: "16px",
+              padding: "16px",
+              cursor: "pointer"
+            }}
+          >
+            <div style={{ fontSize: "12px", color: "#38ef7d", fontWeight: "600", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Icons.Sparkle /> Reklama xizmati
+            </div>
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "#FFF", marginBottom: "4px" }}>
+              Bitta-da o'z brendingizni e'lon qiling!
+            </div>
+            <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", marginBottom: "10px" }}>
+              Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.
+            </div>
+            <span style={{ fontSize: "13px", color: "#0088cc", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+              Murojaat qilish (@bitta_mngr) <Icons.ChevronRight />
+            </span>
+          </div>
+        </section>
+      </>
+    )}
+  </>
 )}
 
-{/* ===================== ЭКРАН SNAKE ===================== */}
-{activeView === "snake" && (
-  <SnakeGame onBack={() => setActiveView("boshqa")} />
+{/* ===================== 2. КОШЕЛЁК (HAMYON) ===================== */}
+{activeView === "wallet" && (
+  <WalletView 
+    balance={userBalance} 
+    onOpenDeposit={handleOpenTopUp} 
+  />
 )}
 
-{/* ===================== ЭКРАН TANGA ===================== */}
-{activeView === "tanga" && (
-  <TangaGame onBack={() => setActiveView("boshqa")} />
-)}
+
+
+
+
 
         {/* ===================== PROFIL ===================== */}
         {activeView === "profile" && (
@@ -1155,6 +929,10 @@ const handleBuy = async () => {
           </div>
         )}
       </div>
+
+      {activeView === "history" && (
+  <HistoryView telegramId={u?.id || 0} />
+)}
 
       {/* ===================== МОДАЛЬНОЕ ОКНО: BALANS TO'LDIRISH ===================== */}
       {isTopUpOpen && (
@@ -1299,14 +1077,32 @@ const handleBuy = async () => {
 {/* ===================== МОДАЛЬНОЕ ОКНО: МАГАЗИН ===================== */}
 {isShopOpen && activeShopType && (
   <>
-    <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsShopOpen(false)} />
+    {/* Затемнение фона */}
+    <div 
+      style={styles.backdrop} 
+      className="bt-backdrop" 
+      onClick={() => setIsShopOpen(false)} 
+    />
+    
+    {/* Всплывающая шторка (Bottom Sheet) */}
     <div style={styles.bottomSheet} className="bt-sheet">
       <div style={styles.sheetIndicator}></div>
-{/* Шапка модального окна */}
+
+      {/* Шапка модального окна */}
       <div style={styles.modalHeader}>
         <div style={{ ...styles.modalLogo, display: 'flex', alignItems: 'center', gap: '10px' }}>
           
-          {/* Берем аватарку игры из gameLogos */}
+          {/* Кнопка "Назад" в шапке на 2-м шаге */}
+          {shopStep === 2 && (
+            <button 
+              onClick={() => { haptic("light"); setShopStep(1); }}
+              style={{ background: 'transparent', border: 'none', color: '#FFF', cursor: 'pointer', padding: '0 4px 0 0', display: 'flex', alignItems: 'center' }}
+            >
+              ‹
+            </button>
+          )}
+
+          {/* Аватарка игры */}
           {gameLogos[activeShopType] ? (
             <img 
               src={gameLogos[activeShopType]} 
@@ -1325,97 +1121,144 @@ const handleBuy = async () => {
           <span>{shopProducts[activeShopType].title}</span>
         </div>
 
-        {shopStep !== 4 && (
-          <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}>
-            <Icons.Close />
-          </button>
-        )}
+        {/* Крестик закрытия */}
+        <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}>
+          <Icons.Close />
+        </button>
       </div>
 
       {/* ШАГ 1: ВЫБОР ТАРИФА */}
       {shopStep === 1 && (
         <div style={styles.sheetBody}>
           <p style={styles.subLabel}>Tarifni tanlang</p>
-          <div style={styles.packGrid}>
+          
+          {/* Сетка тарифов (2 колонки для лучшей читаемости) */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '8px',
+            maxHeight: '340px',
+            overflowY: 'auto',
+            paddingRight: '2px'
+          }}>
             {shopProducts[activeShopType].packs.map((pack: any, idx: number) => {
-              // Авто-выбор картинки: либо личная иконка пака, либо иконка всей игры из shopImages
               const packIcon = pack.icon || shopImages[activeShopType];
 
               return (
                 <button
                   key={idx}
                   style={{
-                    ...styles.packCard,
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '14px',
+                    padding: '10px 12px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '12px 14px'
+                    cursor: 'pointer',
+                    textAlign: 'left'
                   }}
                   className="bt-pack-card"
-                  onClick={() => handleSelectPack(pack)}
+                  onClick={() => {
+                    haptic("light");
+                    handleSelectPack(pack);
+                  }}
                 >
-                  {/* Текст (Название и Цена) слева */}
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={styles.packName}>{pack.name}</div>
-                    <div style={styles.packPrice}>{pack.price}</div>
-                  </div>
-
-          {/* Картинка подставляется автоматически с учётом зума! */}
-                            {packIcon && (
-                              <img
-                                src={packIcon}
-                                alt="icon"
-                                style={{
-                                  width: '32px',
-                                  height: '32px',
-                                  objectFit: 'contain',
-                                  flexShrink: 0,
-                                  transform: pack.scale ? `scale(${pack.scale})` : 'none',
-                                  transition: 'transform 0.2s ease'
-                                }}
-                              />
-                            )}
-                          </button>
-                        );
-                      })}
+                  {/* Название и Цена */}
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1.2' }}>
+                      {pack.name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#a855f7', fontWeight: '600', marginTop: '4px' }}>
+                      {pack.price}
                     </div>
                   </div>
-                )}
+
+                  {/* Иконка товара */}
+                  {packIcon && (
+                    <img
+                      src={packIcon}
+                      alt="icon"
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        objectFit: 'contain',
+                        flexShrink: 0,
+                        transform: pack.scale ? `scale(${pack.scale})` : 'none',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ШАГ 2: ВВОД PLAYER ID И ОПЛАТА */}
       {shopStep === 2 && selectedPack && (
         <div style={styles.sheetBody}>
-          <div style={styles.orderSummary}>
-            Siz tanladingiz: <span style={{ color: "#fff", fontWeight: 700 }}>{selectedPack.name}</span> ({selectedPack.price})
+          {/* Карточка сводки заказа */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '14px',
+            padding: '12px',
+            marginBottom: '14px',
+            fontSize: '13px',
+            color: 'rgba(255, 255, 255, 0.7)'
+          }}>
+            Tanlangan paket: <span style={{ color: "#FFF", fontWeight: 700 }}>{selectedPack.name}</span>
+            <div style={{ fontSize: '14px', color: '#a855f7', fontWeight: '700', marginTop: '2px' }}>
+              {selectedPack.price}
+            </div>
           </div>
-          <input
-            type="text"
-            placeholder={shopProducts[activeShopType].placeholder}
-            value={userCredential}
-            onChange={(e) => setUserCredential(e.target.value)}
-            style={styles.input}
-            className="bt-search-input"
-          />
+
+          {/* Поле ввода ID */}
+          <div style={{ marginBottom: '14px' }}>
+            <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+              {shopProducts[activeShopType].placeholder || "Player ID kiriting"}
+            </p>
+            <input
+              type="text"
+              placeholder={shopProducts[activeShopType].placeholder}
+              value={userCredential}
+              onChange={(e) => setUserCredential(e.target.value)}
+              style={styles.input}
+              className="bt-search-input"
+            />
+          </div>
+
+          {/* Сообщение об ошибке */}
           {buyError && (
-            <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
               <span>{buyError}</span>
               {buyError === "Balansingiz yetarli emas." && (
                 <button
                   style={{ ...styles.btnPrimary, background: "linear-gradient(135deg,#B98BFF,#6E6BFF)" }}
                   className="bt-primary-btn"
-                  onClick={() => { setIsShopOpen(false); handleOpenTopUp(); }}
+                  onClick={() => { haptic("medium"); setIsShopOpen(false); handleOpenTopUp(); }}
                 >
                   <Icons.Wallet /> Hisobni to'ldirish
                 </button>
               )}
             </div>
           )}
+
+          {/* Кнопки действий */}
           <div style={styles.btnRow}>
-            <button style={styles.btnBack} className="bt-secondary-btn" onClick={() => setShopStep(1)}>Orqaga</button>
+            <button 
+              style={styles.btnBack} 
+              className="bt-secondary-btn" 
+              onClick={() => { haptic("light"); setShopStep(1); }}
+            >
+              Orqaga
+            </button>
             <button
-              style={{ ...styles.btnPrimary, background: shopTheme[activeShopType].grad, opacity: isBuying ? 0.7 : 1 }}
+              style={{ ...styles.btnPrimary, background: shopTheme[activeShopType]?.grad || "linear-gradient(135deg,#B98BFF,#6E6BFF)", opacity: isBuying ? 0.7 : 1 }}
               className="bt-primary-btn"
-              onClick={handleBuy}
+              onClick={() => { haptic("medium"); handleBuy(); }}
               disabled={isBuying}
             >
               {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
@@ -1426,92 +1269,31 @@ const handleBuy = async () => {
 
       {/* ШАГ 4: УСПЕШНЫЙ ЗАКАЗ */}
       {shopStep === 4 && (
-        <div style={styles.successBox}>
-          <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
+        <div style={{ ...styles.successBox, padding: '24px 16px', textAlign: 'center' }}>
+          <div style={{ color: "#3DDC97", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
             <Icons.Check />
           </div>
           <div style={styles.successTitle}>Buyurtma qabul qilindi!</div>
-          <div style={styles.successSub}>Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.</div>
+          <div style={{ ...styles.successSub, marginBottom: '20px' }}>
+            Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.
+          </div>
+          
+          {/* Кнопка Готово / Понятно */}
+          <button
+            style={{ ...styles.btnPrimary, background: "#3DDC97", color: "#000", fontWeight: "700", width: "100%" }}
+            className="bt-primary-btn"
+            onClick={() => { haptic("light"); setIsShopOpen(false); }}
+          >
+            Tushunarli
+          </button>
         </div>
       )}
     </div>
   </>
 )}
 
-      {/* ===================== МОДАЛЬНОЕ ОКНО: ОБУЧЕНИЕ ===================== */}
-      {isEduOpen && eduType && (
-        <>
-          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsEduOpen(false)} />
-          <div style={styles.bottomSheet} className="bt-sheet">
-            <div style={styles.sheetIndicator}></div>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}>
-                {eduType === "cefr" ? <Icons.Book /> : <Icons.Pravaga />} {eduType === "cefr" ? "CEFR Imtihonlari" : "Pravaga Tayyorgarlik"}
-              </div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsEduOpen(false)}><Icons.Close /></button>
-            </div>
-            <div style={styles.sheetBody}>
-              <div style={styles.eduInfoCard}>
-                <p style={{ margin: "0 0 8px 0", color: "#E0D7F5", fontSize: "14px", lineHeight: 1.5 }}>
-                  {eduType === "cefr"
-                    ? "CEFR B1, B2, C1 darajadagi testlar, audio materiallar va mock imtihon topshirish bo'limi."
-                    : "Yo'l harakati qoidalari (YHQ), GAI kompyuter imtihoni testlari va bilimlarni onlayn sinash platformasi."}
-                </p>
-              </div>
-              <button
-                style={{ ...styles.btnPrimary, background: themes.teal.grad, width: "100%", marginTop: "12px" }}
-                className="bt-primary-btn"
-                onClick={() => {
-                  haptic("light");
-                  openLinkInside(eduType === "cefr" ? "https://www.efset.org" : "https://pravaapp.uz");
-                }}
-              >
-                <Icons.Rocket /> {eduType === "cefr" ? "EFSET.org saytiga o'tish" : "PravaApp.uz saytiga o'tish"}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
 
 
-
-{/* ===================== БОКОВОЕ МЕНЮ ===================== */}
-      {isMenuOpen && (
-        <>
-          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsMenuOpen(false)} />
-          <div style={styles.drawer}>
-            <div style={styles.drawerHeader}>
-              <div style={styles.drawerTitle}>Bo'limlar</div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsMenuOpen(false)}><Icons.Close /></button>
-            </div>
-
-            <div style={styles.drawerBody}>
-              <div style={styles.drawerGroupLabel}>Xizmatlar</div>
-              <div style={styles.menuNavList}>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("market"); setIsMenuOpen(false); }}>
-                  <div style={{ ...styles.menuNavIconBadge, background: themes.pink.grad }}><Icons.Gamepad /></div>
-                  <span style={styles.menuNavText}>O'yin & Market</span>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("boshqa"); setIsMenuOpen(false); }}>
-                  <div style={{ ...styles.menuNavIconBadge, background: themes.violet.grad }}><Icons.Briefcase /></div>
-                  <span style={styles.menuNavText}>Boshqa xizmatlar</span>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-              </div>
-
-              <div style={styles.drawerGroupLabel}>Hisob</div>
-              <div style={styles.menuNavList}>
-                <button style={styles.menuNavItem} className="bt-row" onClick={() => { if (typeof haptic === 'function') haptic("light"); setActiveView("profile"); setIsMenuOpen(false); }}>
-                  <div style={{ ...styles.menuNavIconBadge, background: "linear-gradient(135deg,#7E7694,#5A536E)" }}><Icons.User /></div>
-                  <span style={styles.menuNavText}>Profil va sozlamalar</span>
-                  <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
       {/* ===================== FOOTER (ПОДВАЛ) ===================== */}
 <footer style={{
   marginTop: '28px',
@@ -1667,71 +1449,133 @@ const handleBuy = async () => {
     </div>
   </div>
 )}
+{/* ===================== НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (BOTTOM NAV) ===================== */}
+<div style={{
+  position: 'fixed',
+  bottom: '12px',
+  left: '16px',
+  right: '16px',
+  height: '62px',
+  backgroundColor: 'rgba(18, 14, 32, 0.85)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
+  borderRadius: '24px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-around',
+  zIndex: 1000,
+  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)'
+}}>
+  {/* 1. Bosh sahifa */}
+  <button
+    onClick={() => {
+      if (typeof haptic === 'function') haptic("light");
+      setActiveView("home");
+    }}
+    style={{
+      background: 'none',
+      border: 'none',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '3px',
+      color: activeView === 'home' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
+      cursor: 'pointer',
+      outline: 'none'
+    }}
+  >
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="2"/>
+      <rect x="14" y="3" width="7" height="7" rx="2"/>
+      <rect x="14" y="14" width="7" height="7" rx="2"/>
+      <rect x="3" y="14" width="7" height="7" rx="2"/>
+    </svg>
+    <span style={{ fontSize: '10px', fontWeight: activeView === 'home' ? '700' : '500' }}>Bosh sahifa</span>
+  </button>
 
-      {/* ===================== ПЛАВАЮЩАЯ КНОПКА BITTA AI ===================== */}
-      {!isAiOpen && (
-        <button
-          style={styles.aiFab}
-          className="bt-ai-fab"
-          onClick={() => { haptic("light"); setIsAiOpen(true); }}
-        >
-          <Icons.Bot />
-          <span>BITTA AI</span>
-        </button>
-      )}
+  {/* 2. Hamyon */}
+  <button
+    onClick={() => {
+      if (typeof haptic === 'function') haptic("light");
+      setActiveView("wallet");
+    }}
+    style={{
+      background: 'none',
+      border: 'none',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '3px',
+      color: activeView === 'wallet' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
+      cursor: 'pointer',
+      outline: 'none'
+    }}
+  >
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+      <path d="M18 12a2 2 0 0 0 0 4h4v-4z" />
+    </svg>
+    <span style={{ fontSize: '10px', fontWeight: activeView === 'wallet' ? '700' : '500' }}>Hamyon</span>
+  </button>
 
-      {/* ===================== ЧАТ BITTA AI ===================== */}
-      {isAiOpen && (
-        <>
-          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsAiOpen(false)} />
-          <div style={{ ...styles.bottomSheet, height: "78vh", display: "flex", flexDirection: "column" }} className="bt-sheet">
-            <div style={styles.sheetIndicator}></div>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}><Icons.Bot /> BITTA AI</div>
-              <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsAiOpen(false)}><Icons.Close /></button>
-            </div>
+  {/* 3. Tarix */}
+  <button
+    onClick={() => {
+      if (typeof haptic === 'function') haptic("light");
+      setActiveView("history");
+    }}
+    style={{
+      background: 'none',
+      border: 'none',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '3px',
+      color: activeView === 'history' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
+      cursor: 'pointer',
+      outline: 'none'
+    }}
+  >
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+    <span style={{ fontSize: '10px', fontWeight: activeView === 'history' ? '700' : '500' }}>Tarix</span>
+  </button>
 
-            <div style={styles.aiMessagesList}>
-              {aiMessages.length === 0 && (
-                <div style={styles.aiEmptyState}>
-                  <Icons.Bot />
-                  <p style={{ margin: "10px 0 0 0" }}>Salom! Men BITTA AI — savolingiz bo'lsa, yozing: donatlar, CEFR, prava yoki ish qidirish bo'yicha yordam beraman.</p>
-                </div>
-              )}
-              {aiMessages.map((m, i) => (
-                <div key={i} style={m.role === "user" ? styles.aiBubbleUser : styles.aiBubbleAssistant}>
-                  {m.text}
-                </div>
-              ))}
-              {isAiLoading && (
-                <div style={styles.aiBubbleAssistant}>
-                  <span className="bt-ai-typing"><span></span><span></span><span></span></span>
-                </div>
-              )}
-              {aiError && <div style={{ color: "#FF9DAF", fontSize: "12px", textAlign: "center" }}>{aiError}</div>}
-            </div>
+  {/* 4. Profil */}
+  <button
+    onClick={() => {
+      if (typeof haptic === 'function') haptic("light");
+      setActiveView("profile");
+    }}
+    style={{
+      background: 'none',
+      border: 'none',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '3px',
+      color: activeView === 'profile' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
+      cursor: 'pointer',
+      outline: 'none'
+    }}
+  >
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span style={{ fontSize: '10px', fontWeight: activeView === 'profile' ? '700' : '500' }}>Profil</span>
+  </button>
+</div>
 
-            <div style={styles.aiInputRow}>
-              <input
-                type="text"
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSendAi(); }}
-                placeholder="Savolingizni yozing..."
-                style={styles.aiInput}
-                disabled={isAiLoading}
-              />
-              <button style={styles.aiSendBtn} className="bt-primary-btn" onClick={handleSendAi} disabled={isAiLoading || !aiInput.trim()}>
-                <Icons.Send />
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+{/* ===================== AI УДАЛЁН ===================== */}
+
     </div>
   );
 }
-
 
 // ===================== СТИЛИ (JS OBJECT) =====================
 
