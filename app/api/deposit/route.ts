@@ -2,37 +2,47 @@ import { NextRequest, NextResponse } from "next/server";
 import { createDeposit } from "@/lib/db";
 import { sendMessage } from "@/lib/telegram";
 
+// 💡 ДОБАВЛЯЕМ ЭТОТ БЛОК: Защита для показа в браузере
+export async function GET() {
+  return NextResponse.json({
+    status: "online",
+    message: "Эндпоинт депозитов работает. Отправляйте POST-запрос из Mini App.",
+  });
+}
+
+// Ваш основной обработчик платежей
 export async function POST(req: NextRequest) {
   try {
-    const rawBody = await req.text().catch(() => "");
-    if (!rawBody) return NextResponse.json({ error: "Empty request" }, { status: 400 });
+    const body = await req.json().catch(() => null);
 
-    let body: any = {};
-    try {
-      body = JSON.parse(rawBody);
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    if (!body) {
+      return NextResponse.json(
+        { error: "Данные не переданы или формат не JSON" },
+        { status: 400 }
+      );
     }
 
-    const { telegramId, amount, username } = body;
+    const { telegramId, amount, username, service } = body;
 
     if (!telegramId || !amount || Number(amount) <= 0) {
-      return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Заполните сумму и Telegram ID" },
+        { status: 400 }
+      );
     }
 
-    // 1. Создаем депозит в базе
     const deposit = await createDeposit(Number(telegramId), Number(amount));
 
-    // 2. Отправляем карточку админам
     const adminIds = (process.env.ADMIN_TELEGRAM_IDS || "")
       .split(",")
       .map((id) => id.trim())
       .filter(Boolean);
 
-    const messageText = 
-      `💳 <b>Новая заявка на пополнение!</b>\n\n` +
-      `👤 Пользователь: ${username ? `@${username}` : telegramId}\n` +
+    const messageText =
+      `🎮 <b>Новая заявка на пополнение!</b>\n\n` +
+      `👤 Игрок: ${username ? `@${username}` : telegramId}\n` +
       `🆔 Telegram ID: <code>${telegramId}</code>\n` +
+      `🎯 Сервис: <b>${service || "Пополнение баланса"}</b>\n` +
       `💰 Сумма: <b>${Number(amount).toLocaleString("ru-RU")} сум</b>\n\n` +
       `📌 ID заявки: <code>${deposit.id}</code>`;
 
@@ -52,6 +62,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, depositId: deposit.id });
   } catch (err: any) {
     console.error("Deposit Route Error:", err);
-    return NextResponse.json({ error: "Server Error" }, { status: 500 });
+    return NextResponse.json({ error: "Ошибка на сервере" }, { status: 500 });
   }
 }
