@@ -1,145 +1,105 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getDeposit, approveDeposit, rejectDeposit } from "@/lib/db";
+import { answerCallbackQuery, editMessageText, sendMessage } from "@/lib/telegram";
 
-export const dynamic = 'force-dynamic';
-
-function isFromTelegram(req: NextRequest) {
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (!secret) return true;
-  return req.headers.get("x-telegram-bot-api-secret-token") === secret;
-}
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    if (!isFromTelegram(req)) {
-      return NextResponse.json({ ok: false }, { status: 401 });
-    }
-
-    // Безопасно получаем сырой текст запроса, не вызывая req.json()
     const rawBody = await req.text().catch(() => "");
     if (!rawBody) return NextResponse.json({ ok: true });
 
-    let update: any = null;
+    let update: any;
     try {
       update = JSON.parse(rawBody);
     } catch {
-      // Если пришёл не JSON (например, multipart с дефисами '--'), просто выходим
       return NextResponse.json({ ok: true });
     }
 
     const cb = update?.callback_query;
     if (!cb) return NextResponse.json({ ok: true });
 
-    const db = await import("@/lib/db");
-    const tg = await import("@/lib/telegram");
+    const data = String(cb.data || "");
+    const callbackId = cb.id;
+    const chatId = cb.message?.chat?.id;
+    const messageId = cb.message?.message_id;
+    const fromId = cb.from?.id;
 
-    const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_IDS ?? "")
+    // Проверка прав админа
+    const adminIds = (process.env.ADMIN_TELEGRAM_IDS || "")
       .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map(Number);
+      .map((id) => Number(id.trim()))
+      .filter(Boolean);
 
-    const fromId: number = cb.from?.id;
-    const chatId: number = cb.message?.chat?.id;
-    const messageId: number = cb.message?.message_id;
-    const hasPhoto: boolean = Boolean(cb.message?.photo);
-    const data: string = cb.data ?? "";
-
-    if (ADMIN_IDS.length > 0 && !ADMIN_IDS.includes(fromId)) {
-      await tg.answerCallbackQuery(cb.id, "Bu tugma faqat admin uchun", true);
+    if (adminIds.length > 0 && !adminIds.includes(fromId)) {
+      await answerCallbackQuery(callbackId, "⛔ У вас нет прав!", true);
       return NextResponse.json({ ok: true });
     }
 
-    const [domain, action, id] = data.split(":");
-
-    // ===== Пополнение баланса =====
-    if (domain === "dep") {
+    // Обработка кнопок пополнения
+    if (data.startsWith("dep:")) {
+      const [_, action, depositId] = data.split(":");
+      
       try {
-        const deposit = await db.getDeposit(id);
+        const deposit = await getDeposit(depositId);
+
         if (!deposit) {
-          await tg.answerCallbackQuery(cb.id, "So'rov topilmadi", true);
+          await answerCallbackQuery(callbackId, "Заявка не найдена!", true);
           return NextResponse.json({ ok: true });
         }
+
+        const formattedAmount = Number(deposit.amount).toLocaleString("ru-RU");
 
         if (action === "approve") {
-          await db.approveDeposit(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `✅ <b>Tasdiqlandi</b>\n💰 +${Number(deposit.amount).toLocaleString("ru-RU")} so'm`);
-          await tg.sendMessage(deposit.user_id, `✅ Balansingiz ${Number(deposit.amount).toLocaleString("ru-RU")} so'mga to'ldirildi!`);
-          await tg.answerCallbackQuery(cb.id, "Tasdiqlandi ✅");
+          await approveDeposit(depositId);
+
+          // Обновляем сообщение у админа
+          await editMessageText(
+            chatId,
+            messageId,
+            `✅ <b>ОДОБРЕНО</b>\n💰 Сумма: <b>${formattedAmount} сум</b>\n🆔 Игрок: <code>${deposit.user_id}</code>`
+          );
+
+          // Пишем пользователю
+          await sendMessage(
+            deposit.user_id,
+            `🎉 <b>Ваш баланс пополнен на ${formattedAmount} сум!</b>`
+          );
+
+          await answerCallbackQuery(callbackId, "Успешно одобрено ✅");
         } else if (action === "reject") {
-          await db.rejectDeposit(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `❌ <b>Rad etildi</b>\n💰 ${Number(deposit.amount).toLocaleString("ru-RU")} so'm`);
-          await tg.sendMessage(deposit.user_id, `❌ To'ldirish so'rovingiz (${Number(deposit.amount).toLocaleString("ru-RU")} so'm) rad etildi.`);
-          await tg.answerCallbackQuery(cb.id, "Rad etildi");
+          await rejectDeposit(depositId);
+
+          // Обновляем сообщение у админа
+          await editMessageText(
+            chatId,
+            messageId,
+            `❌ <b>ОТКЛОНЕНО</b>\n💰 Сумма: <b>${formattedAmount} сум</b>\n🆔 Игрок: <code>${deposit.user_id}</code>`
+          );
+
+          // Пишем пользователю
+          await sendMessage(
+            deposit.user_id,
+            `❌ <b>Заявка на пополнение (${formattedAmount} сум) отклонена.</b>`
+          );
+
+          await answerCallbackQuery(callbackId, "Заявка отклонена ❌");
         }
-      } catch (e: any) {
-        const message = e?.message || "";
-        const isAlreadyDecided = message.includes("DEPOSIT_ALREADY_DECIDED") || message.includes("ALREADY_DECIDED");
-        await tg.answerCallbackQuery(
-          cb.id,
-          isAlreadyDecided ? "Bu so'rov allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi",
+      } catch (err: any) {
+        const msg = err?.message || "";
+        const isProcessed = msg.includes("ALREADY_PROCESSED");
+        await answerCallbackQuery(
+          callbackId,
+          isProcessed ? "Заявка уже обработана!" : "Ошибка БД",
           true
         );
       }
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ===== Заказы =====
-    if (domain === "ord") {
-      try {
-        const order = await db.getOrder(id);
-        if (!order) {
-          await tg.answerCallbackQuery(cb.id, "Buyurtma topilmadi", true);
-          return NextResponse.json({ ok: true });
-        }
-
-        if (action === "complete") {
-          await db.completeOrder(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `✅ <b>Bajarildi</b> — buyurtma #${order.order_no} (${order.product_name})`);
-          await tg.sendMessage(order.user_id, `✅ Buyurtmangiz (${order.product_name}) joylandi. Rahmat!`);
-          await tg.answerCallbackQuery(cb.id, "Bajarildi ✅");
-        } else if (action === "refund") {
-          await db.refundOrder(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `❌ <b>Bekor qilindi</b> — buyurtma #${order.order_no}, mablag' qaytarildi`);
-          await tg.sendMessage(order.user_id, `❌ Buyurtmangiz (${order.product_name}) bekor qilindi, ${Number(order.price).toLocaleString("ru-RU")} so'm hisobingizga qaytarildi.`);
-          await tg.answerCallbackQuery(cb.id, "Bekor qilindi, pul qaytarildi");
-        }
-      } catch (e: any) {
-        const message = e?.message || "";
-        await tg.answerCallbackQuery(
-          cb.id,
-          message.includes("ALREADY_DECIDED") ? "Bu buyurtma allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi",
-          true
-        );
-      }
-
-      return NextResponse.json({ ok: true });
-    }
-
-    // ===== Вакансии =====
-    if (domain === "vac") {
-      try {
-        const vacancy = await db.getVacancy(id);
-        if (!vacancy) {
-          await tg.answerCallbackQuery(cb.id, "E'lon topilmadi", true);
-          return NextResponse.json({ ok: true });
-        }
-
-        if (action === "archive") {
-          await db.archiveVacancy(id);
-          await tg.editDecision(chatId, messageId, hasPhoto, `🗑 <b>O'chirildi</b> — ${vacancy.title}`);
-          await tg.answerCallbackQuery(cb.id, "O'chirildi");
-        }
-      } catch (e) {
-        await tg.answerCallbackQuery(cb.id, "Xatolik yuz berdi", true);
-      }
-
-      return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("❌ Ошибка в bot/route.ts:", err);
+    console.error("Bot Route Error:", err);
+    // САМОЕ ГЛАВНОЕ: Telegram ВСЕГДА получает 200 OK!
     return NextResponse.json({ ok: true });
   }
 }
