@@ -25,7 +25,6 @@ export async function POST(req: NextRequest) {
     const messageId = cb.message?.message_id;
     const fromId = Number(cb.from?.id);
 
-    // Проверка прав админа
     const adminIds = (process.env.ADMIN_TELEGRAM_IDS || "")
       .split(",")
       .map((id) => Number(id.trim()))
@@ -50,17 +49,14 @@ export async function POST(req: NextRequest) {
         const formattedAmount = Number(deposit.amount).toLocaleString("uz-UZ");
 
         if (action === "approve") {
-          // 1. Атомарное зачисление средств в PostgreSQL
           await approveDeposit(depositId);
 
-          // 2. Обновление карточки админа
           await editMessageText(
             chatId,
             messageId,
             `✅ <b>TASDIQLANDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
           );
 
-          // 3. Сообщение пользователю в личку на узбекском
           await sendMessage(
             deposit.user_id,
             `🎉 <b>Hisobingiz muvaffaqiyatli to'ldirildi!</b>\n\n💰 Qo'shildi: <b>${formattedAmount} so'm</b>`
@@ -68,17 +64,14 @@ export async function POST(req: NextRequest) {
 
           await answerCallbackQuery(callbackId, "To'lov tasdiqlandi ✅");
         } else if (action === "reject") {
-          // 1. Отклонение в базе
           await rejectDeposit(depositId);
 
-          // 2. Обновление карточки админа
           await editMessageText(
             chatId,
             messageId,
             `❌ <b>RAD ETILDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
           );
 
-          // 3. Сообщение пользователю
           await sendMessage(
             deposit.user_id,
             `❌ <b>To'lov so'rovingiz rad etildi (${formattedAmount} so'm).</b>`
@@ -87,11 +80,15 @@ export async function POST(req: NextRequest) {
           await answerCallbackQuery(callbackId, "So'rov rad etildi ❌");
         }
       } catch (err: any) {
+        // 🔥 ВЫВОДИМ ТОЧНУЮ ОШИБКУ В ЛОГИ VERCEL
+        console.error("ОШИБКА ОБРАБОТКИ ДЕПОЗИТА:", err);
+        
         const msg = err?.message || "";
         const isProcessed = msg.includes("ALREADY_PROCESSED") || msg.includes("DEPOSIT_ALREADY_DECIDED");
+        
         await answerCallbackQuery(
           callbackId,
-          isProcessed ? "Bu so'rov allaqachon ko'rib chiqilgan!" : "Xatolik yuz berdi",
+          isProcessed ? "Bu so'rov allaqachon ko'rib chiqilgan!" : `Xatolik: ${msg || "Baza xatosi"}`,
           true
         );
       }
@@ -99,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Bot Webhook Error:", err);
+    console.error("ОШИБКА ВЕБХУКА БОТА:", err);
     return NextResponse.json({ ok: true });
   }
 }
