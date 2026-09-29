@@ -67,7 +67,8 @@ export async function createDeposit(telegramId: number, amount: number) {
 }
 
 export async function getDeposit(id: string) {
-  const { data } = await supabase.from("deposits").select("*").eq("id", id).single();
+  const { data, error } = await supabase.from("deposits").select("*").eq("id", id).single();
+  if (error) return null;
   return data;
 }
 
@@ -103,14 +104,12 @@ export async function rejectDeposit(id: string) {
   const deposit = await getDeposit(id);
   if (!deposit || deposit.status !== "pending") throw new Error("ALREADY_DECIDED");
 
-  await supabase.from("deposits").update({ status: "rejected" }).eq("id", id);
+  const { error } = await supabase.from("deposits").update({ status: "rejected" }).eq("id", id);
+  if (error) throw error;
 }
 
 // --- ЗАКАЗЫ (ИСПОЛЬЗУЕМ АТОМАРНЫЕ SQL-ФУНКЦИИ) ---
 
-/**
- * Атомарная покупка (списание денег + создание заказа) через SQL-функцию
- */
 export async function purchaseWithBalance(
   userId: number,
   service: string,
@@ -130,9 +129,6 @@ export async function purchaseWithBalance(
   return data;
 }
 
-/**
- * Отметка заказа выполненным
- */
 export async function completeOrder(orderId: string) {
   const { error } = await supabase.rpc("complete_order", {
     p_order_id: orderId,
@@ -141,9 +137,6 @@ export async function completeOrder(orderId: string) {
   if (error) throw new Error(error.message);
 }
 
-/**
- * Возврат средств за заказ обратно на баланс
- */
 export async function refundOrder(orderId: string) {
   const { error } = await supabase.rpc("refund_order", {
     p_order_id: orderId,
@@ -153,17 +146,20 @@ export async function refundOrder(orderId: string) {
 }
 
 export async function getOrder(id: string) {
-  const { data } = await supabase.from("orders").select("*").eq("id", id).single();
+  const { data, error } = await supabase.from("orders").select("*").eq("id", id).single();
+  if (error) return null;
   return data;
 }
 
 // --- ВАКАНСИИ ---
 
 export async function getVacancy(id: string) {
-  const { data } = await supabase.from("vacancies").select("*").eq("id", id).single();
+  const { data, error } = await supabase.from("vacancies").select("*").eq("id", id).single();
+  if (error) return null;
   return data;
 }
 
 export async function archiveVacancy(id: string) {
-  await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
+  const { error } = await supabase.from("vacancies").update({ status: "archived" }).eq("id", id);
+  if (error) throw error;
 }
