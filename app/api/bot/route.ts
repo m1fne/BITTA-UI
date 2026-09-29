@@ -8,19 +8,28 @@ function isFromTelegram(req: NextRequest) {
   return req.headers.get("x-telegram-bot-api-secret-token") === secret;
 }
 
-// POST /api/bot
 export async function POST(req: NextRequest) {
   try {
-    // 1. Проверка секретного токена вебхука
+    // 1. Проверяем secret-токен вебхука
     if (!isFromTelegram(req)) {
-      console.warn("🚨 [SECURITY ALERT] Webhook secret не совпал!");
       return NextResponse.json({ ok: false }, { status: 401 });
     }
 
-    // 2. Безопасное чтение JSON
-    const update = await req.json().catch(() => null);
-    const cb = update?.callback_query;
+    // 2. Игнорируем multipart/form-data запросы (они не могут быть от webhook)
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      return NextResponse.json({ ok: true });
+    }
 
+    // 3. Безопасное чтение JSON (защита от ошибок парсинга)
+    let update: any = null;
+    try {
+      update = await req.json();
+    } catch (e) {
+      return NextResponse.json({ ok: true });
+    }
+
+    const cb = update?.callback_query;
     if (!cb) return NextResponse.json({ ok: true });
 
     // Динамический импорт модулей
@@ -39,7 +48,7 @@ export async function POST(req: NextRequest) {
     const hasPhoto: boolean = Boolean(cb.message?.photo);
     const data: string = cb.data ?? "";
 
-    // 3. Проверка прав администратора
+    // Проверка прав администратора
     if (ADMIN_IDS.length > 0 && !ADMIN_IDS.includes(fromId)) {
       await tg.answerCallbackQuery(cb.id, "Bu tugma faqat admin uchun", true);
       return NextResponse.json({ ok: true });
@@ -70,12 +79,11 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         const message = e instanceof Error ? e.message : "UNKNOWN";
         await tg.answerCallbackQuery(
-          cb.id,
-          message.includes("ALREADY_DECIDED") ? "Bu so'rov allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi",
+          cb.id, 
+          message.includes("ALREADY_DECIDED") ? "Bu so'rov allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi", 
           true
         );
       }
-
       return NextResponse.json({ ok: true });
     }
 
@@ -102,16 +110,15 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         const message = e instanceof Error ? e.message : "UNKNOWN";
         await tg.answerCallbackQuery(
-          cb.id,
-          message.includes("ALREADY_DECIDED") ? "Bu buyurtma allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi",
+          cb.id, 
+          message.includes("ALREADY_DECIDED") ? "Bu buyurtma allaqachon ko'rib chiqilgan" : "Xatolik yuz berdi", 
           true
         );
       }
-
       return NextResponse.json({ ok: true });
     }
 
-    // ===== Вакансии/резюме =====
+    // ===== Вакансии =====
     if (domain === "vac") {
       try {
         const vacancy = await db.getVacancy(id);
@@ -128,14 +135,12 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         await tg.answerCallbackQuery(cb.id, "Xatolik yuz berdi", true);
       }
-
       return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (globalErr) {
-    console.error("❌ Критическая ошибка в POST /api/bot:", globalErr);
-    // Возвращаем { ok: true }, чтобы Telegram снял бесконечную загрузку с кнопки
+  } catch (err) {
+    console.error("❌ Ошибка в bot/route.ts:", err);
     return NextResponse.json({ ok: true });
   }
 }

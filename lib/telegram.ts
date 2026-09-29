@@ -10,7 +10,7 @@ export function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Безопасная функция отправки запросов к Telegram
+// 💡 Безопасная функция отправки запросов к Telegram без падений res.json()
 async function safeFetch(url: string, options: RequestInit) {
   if (!BOT_TOKEN) {
     console.error("❌ TELEGRAM_BOT_TOKEN не задан в .env!");
@@ -24,7 +24,7 @@ async function safeFetch(url: string, options: RequestInit) {
     try {
       return JSON.parse(rawText);
     } catch {
-      console.error(`❌ Telegram API вернул не-JSON ответ (статус ${res.status}):`, rawText);
+      console.error(`❌ Telegram API вернул не-JSON ответ (код ${res.status}):`, rawText);
       return { ok: false, error: "INVALID_JSON", rawText };
     }
   } catch (err) {
@@ -46,7 +46,6 @@ export async function sendMessage(chatId: number, text: string, buttons?: Inline
   });
 }
 
-// Пересылает чек (фото) админу — байты идут напрямую в Telegram, без хранения на своём сервере.
 export async function sendPhoto(chatId: number, file: Blob, filename: string, caption: string, buttons?: InlineButton[][]) {
   const form = new FormData();
   form.append("chat_id", String(chatId));
@@ -58,20 +57,19 @@ export async function sendPhoto(chatId: number, file: Blob, filename: string, ca
   return safeFetch(`${API}/sendPhoto`, { method: "POST", body: form });
 }
 
-// После решения админа убираем кнопки и меняем текст под исходным сообщением.
 export async function editDecision(chatId: number, messageId: number, hasPhoto: boolean, text: string) {
   const method = hasPhoto ? "editMessageCaption" : "editMessageText";
   const bodyField = hasPhoto ? { caption: text } : { text };
-  
+
   return safeFetch(`${API}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      chat_id: chatId, 
-      message_id: messageId, 
-      parse_mode: "HTML", 
-      reply_markup: { inline_keyboard: [] }, // Очищаем кнопки
-      ...bodyField 
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [] }, // Очищаем кнопки после клика
+      ...bodyField,
     }),
   });
 }
