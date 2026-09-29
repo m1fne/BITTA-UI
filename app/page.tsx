@@ -934,212 +934,300 @@ const handleBuy = async () => {
   <HistoryView telegramId={u?.id || 0} />
 )}
 
-      {/* ===================== МОДАЛЬНОЕ ОКНО: BALANS TO'LDIRISH ===================== */}
-      {isTopUpOpen && (
-        <>
-          <div style={styles.backdrop} className="bt-backdrop" onClick={() => setIsTopUpOpen(false)} />
-          <div style={styles.bottomSheet} className="bt-sheet">
-            <div style={styles.sheetIndicator}></div>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalLogo}><Icons.Wallet /> Balans to'ldirish</div>
-              {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected") && (
-                <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsTopUpOpen(false)}><Icons.Close /></button>
-              )}
-            </div>
+{/* ===================== ПОЛНОЭКРАННОЕ ОКНО: BALANS TO'LDIRISH ===================== */}
+{isTopUpOpen && (
+  <div 
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: '65px', // Отступ снизу, чтобы НЕ перекрывать Нижнее Меню
+      background: '#0d0f17', // Тёмный фон приложения
+      zIndex: 99,
+      overflowY: 'auto',
+      display: 'flex',
+      flexDirection: 'column'
+    }}
+  >
+    {/* ВЕРХНЯЯ ПАНЕЛЬ С КНОПКОЙ «НАЗАД / ЗАКРЫТЬ» */}
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '16px',
+      position: 'sticky',
+      top: 0,
+      background: '#0d0f17',
+      zIndex: 10,
+      borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+    }}>
+      <button 
+        onClick={() => {
+          haptic("light");
+          setIsTopUpOpen(false);
+        }}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: '#FFF',
+          fontSize: '16px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}
+      >
+        ‹ Orqaga
+      </button>
 
-            {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") ? (
-              <div style={styles.sheetBody}>
-                {/* КАРТОЧКА ДЛЯ ОПЛАТЫ */}
-                <div style={styles.paymentCard}>
-                  <p style={styles.paymentText}>
-                    Plastik kartamizga to'lovni amalga oshiring:
-                  </p>
-                  <div style={styles.cardBox}>
-                    <span style={styles.cardNumber}>9860 1966 1961 4445</span>
-                    <button
-                      style={styles.copyBtn}
-                      className="bt-copy-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText("9860196619614445");
-                        haptic("light");
-                        setTopUpCopied(true);
-                        setTimeout(() => setTopUpCopied(false), 1500);
-                      }}
-                    >
-                      {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
-                    </button>
-                  </div>
-                  <div style={styles.cardHolder}>Karta egasi: MUSA X.</div>
-                </div>
-
-                {/* ВВОД СУММЫ */}
-                <div style={{ marginTop: "16px" }}>
-                  <label style={styles.inputLabel}>To'lov summasi (UZS):</label>
-                  <input
-                    type="number"
-                    placeholder="Masalan: 50000"
-                    value={topUpAmount}
-                    onChange={(e) => setTopUpAmount(e.target.value)}
-                    style={styles.input}
-                    className="bt-search-input"
-                  />
-                  {/* КНОПКИ БЫСТРОГО ВЫБОРА СУММЫ */}
-                  <div style={styles.quickAmountRow}>
-                    {["10000", "25000", "50000", "100000"].map((amt) => (
-                      <button
-                        key={amt}
-                        style={styles.quickAmountBtn}
-                        className="bt-quick-btn"
-                        onClick={() => {
-                          setTopUpAmount(amt);
-                          haptic("light");
-                        }}
-                      >
-                        +{parseInt(amt).toLocaleString("uz-UZ")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ЗАГРУЗКА ЧЕКА */}
-                <div style={{ marginTop: "16px" }}>
-                  <label style={styles.inputLabel}>To'lov chekini yuklang (rasm):</label>
-                  <label style={styles.fileUploadBox} className="bt-tile">
-                    <Icons.Upload />
-                    <span style={{ fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                      {topUpReceiptName ? <><Icons.FileText /> {topUpReceiptName}</> : "Chek rasmini tanlang"}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleReceiptUpload}
-                      style={{ display: "none" }}
-                    />
-                  </label>
-                </div>
-
-                {topUpStatus === "error" && (
-                  <p style={{ color: "#FF9DAF", fontSize: "12px", marginTop: "10px" }}>{topUpError}</p>
-                )}
-
-                {/* КНОПКА ПОДТВЕРЖДЕНИЯ */}
-                <button
-                  style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px", opacity: topUpStatus === "submitting" ? 0.7 : 1 }}
-                  className="bt-primary-btn"
-                  onClick={handleFinishTopUp}
-                  disabled={topUpStatus === "submitting"}
-                >
-                  {topUpStatus === "submitting" ? "Yuborilmoqda..." : <><Icons.Rocket /> To'lovni tasdiqlash</>}
-                </button>
-              </div>
-            ) : topUpStatus === "pending" ? (
-              <div style={styles.successBox}>
-                <div style={{ color: "#FFD166", marginBottom: "12px" }}>
-                  <Icons.Clock />
-                </div>
-                <div style={styles.successTitle}>Tekshirilmoqda...</div>
-                <div style={styles.successSub}>
-                  To'lov so'rovingiz adminga yuborildi. Tasdiqlangach bu oyna avtomatik yangilanadi — hech narsa qilish shart emas.
-                </div>
-              </div>
-            ) : topUpStatus === "approved" ? (
-              <div style={styles.successBox}>
-                <div style={{ color: "#3DDC97", marginBottom: "12px" }}>
-                  <Icons.Check />
-                </div>
-                <div style={styles.successTitle}>Balans to'ldirildi!</div>
-                <div style={styles.successSub}>
-                  Joriy balansingiz: <strong style={{ color: "#3DDC97" }}>{userBalance.toLocaleString("uz-UZ")} UZS</strong>
-                </div>
-              </div>
-            ) : (
-              <div style={styles.successBox}>
-                <div style={{ color: "#FF9DAF", marginBottom: "12px" }}>
-                  <Icons.XCircle />
-                </div>
-                <div style={styles.successTitle}>So'rov rad etildi</div>
-                <div style={styles.successSub}>
-                  To'lov tasdiqlanmadi. Agar bu xato bo'lsa, @bitta_mngr ga yozing yoki qaytadan urinib ko'ring.
-                </div>
-                <button
-                  style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "16px" }}
-                  className="bt-primary-btn"
-                  onClick={handleOpenTopUp}
-                >
-                  Qayta urinish
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-{/* ===================== МОДАЛЬНОЕ ОКНО: МАГАЗИН ===================== */}
-{isShopOpen && activeShopType && (
-  <>
-    {/* Затемнение фона */}
-    <div 
-      style={styles.backdrop} 
-      className="bt-backdrop" 
-      onClick={() => setIsShopOpen(false)} 
-    />
-    
-    {/* Всплывающая шторка (Bottom Sheet) */}
-    <div style={styles.bottomSheet} className="bt-sheet">
-      <div style={styles.sheetIndicator}></div>
-
-      {/* Шапка модального окна */}
-      <div style={styles.modalHeader}>
-        <div style={{ ...styles.modalLogo, display: 'flex', alignItems: 'center', gap: '10px' }}>
-          
-          {/* Кнопка "Назад" в шапке на 2-м шаге */}
-          {shopStep === 2 && (
-            <button 
-              onClick={() => { haptic("light"); setShopStep(1); }}
-              style={{ background: 'transparent', border: 'none', color: '#FFF', cursor: 'pointer', padding: '0 4px 0 0', display: 'flex', alignItems: 'center' }}
-            >
-              ‹
-            </button>
-          )}
-
-          {/* Аватарка игры */}
-          {gameLogos[activeShopType] ? (
-            <img 
-              src={gameLogos[activeShopType]} 
-              alt="Game Logo" 
-              style={{ 
-                width: '28px', 
-                height: '28px', 
-                borderRadius: '8px', 
-                objectFit: 'cover' 
-              }} 
-            />
-          ) : (
-            (() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()
-          )}
-
-          <span>{shopProducts[activeShopType].title}</span>
-        </div>
-
-        {/* Крестик закрытия */}
-        <button style={styles.closeModalBtn} className="bt-close-btn" onClick={() => setIsShopOpen(false)}>
-          <Icons.Close />
-        </button>
+      {/* Заголовок */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: '#a855f7', display: 'flex', alignItems: 'center' }}><Icons.Wallet /></span>
+        <span style={{ fontSize: '15px', fontWeight: '700', color: '#FFF' }}>
+          Balans to'ldirish
+        </span>
       </div>
 
-      {/* ШАГ 1: ВЫБОР ТАРИФА */}
+      {/* Кнопка закрытия (если разрешено статусом) */}
+      <div>
+        {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected") ? (
+          <button 
+            style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex' }} 
+            onClick={() => setIsTopUpOpen(false)}
+          >
+            <Icons.Close />
+          </button>
+        ) : (
+          <div style={{ width: '24px' }}></div>
+        )}
+      </div>
+    </div>
+
+    {/* КОНТЕНТ СТРАНИЦЫ */}
+    <div style={{ padding: '16px', flex: 1 }}>
+      {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") ? (
+        <div>
+          {/* КАРТОЧКА ДЛЯ ОПЛАТЫ */}
+          <div style={styles.paymentCard}>
+            <p style={styles.paymentText}>
+              Plastik kartamizga to'lovni amalga oshiring:
+            </p>
+            <div style={styles.cardBox}>
+              <span style={styles.cardNumber}>9860 1966 1961 4445</span>
+              <button
+                style={styles.copyBtn}
+                className="bt-copy-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText("9860196619614445");
+                  haptic("light");
+                  setTopUpCopied(true);
+                  setTimeout(() => setTopUpCopied(false), 1500);
+                }}
+              >
+                {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
+              </button>
+            </div>
+            <div style={styles.cardHolder}>Karta egasi: MUSA X.</div>
+          </div>
+
+          {/* ВВОД СУММЫ */}
+          <div style={{ marginTop: "16px" }}>
+            <label style={styles.inputLabel}>To'lov summasi (UZS):</label>
+            <input
+              type="number"
+              placeholder="Masalan: 50000"
+              value={topUpAmount}
+              onChange={(e) => setTopUpAmount(e.target.value)}
+              style={styles.input}
+              className="bt-search-input"
+            />
+            {/* КНОПКИ БЫСТРОГО ВЫБОРА СУММЫ */}
+            <div style={styles.quickAmountRow}>
+              {["10000", "25000", "50000", "100000"].map((amt) => (
+                <button
+                  key={amt}
+                  style={styles.quickAmountBtn}
+                  className="bt-quick-btn"
+                  onClick={() => {
+                    setTopUpAmount(amt);
+                    haptic("light");
+                  }}
+                >
+                  +{parseInt(amt).toLocaleString("uz-UZ")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ЗАГРУЗКА ЧЕКА */}
+          <div style={{ marginTop: "16px" }}>
+            <label style={styles.inputLabel}>To'lov chekini yuklang (rasm):</label>
+            <label style={styles.fileUploadBox} className="bt-tile">
+              <Icons.Upload />
+              <span style={{ fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                {topUpReceiptName ? <><Icons.FileText /> {topUpReceiptName}</> : "Chek rasmini tanlang"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleReceiptUpload}
+                style={{ display: "none" }}
+              />
+            </label>
+          </div>
+
+          {topUpStatus === "error" && (
+            <p style={{ color: "#FF9DAF", fontSize: "12px", marginTop: "10px" }}>{topUpError}</p>
+          )}
+
+          {/* КНОПКА ПОДТВЕРЖДЕНИЯ */}
+          <button
+            style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "24px", opacity: topUpStatus === "submitting" ? 0.7 : 1 }}
+            className="bt-primary-btn"
+            onClick={handleFinishTopUp}
+            disabled={topUpStatus === "submitting"}
+          >
+            {topUpStatus === "submitting" ? "Yuborilmoqda..." : <><Icons.Rocket /> To'lovni tasdiqlash</>}
+          </button>
+        </div>
+      ) : topUpStatus === "pending" ? (
+        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
+          <div style={{ color: "#FFD166", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
+            <Icons.Clock />
+          </div>
+          <div style={styles.successTitle}>Tekshirilmoqda...</div>
+          <div style={styles.successSub}>
+            To'lov so'rovingiz adminga yuborildi. Tasdiqlangach bu oyna avtomatik yangilanadi — hech narsa qilish shart emas.
+          </div>
+        </div>
+      ) : topUpStatus === "approved" ? (
+        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
+          <div style={{ color: "#3DDC97", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
+            <Icons.Check />
+          </div>
+          <div style={styles.successTitle}>Balans to'ldirildi!</div>
+          <div style={styles.successSub}>
+            Joriy balansingiz: <strong style={{ color: "#3DDC97" }}>{userBalance.toLocaleString("uz-UZ")} UZS</strong>
+          </div>
+          <button
+            style={{ ...styles.btnPrimary, background: "#3DDC97", color: "#000", fontWeight: "700", width: "100%", marginTop: "20px" }}
+            className="bt-primary-btn"
+            onClick={() => setIsTopUpOpen(false)}
+          >
+            Tushunarli
+          </button>
+        </div>
+      ) : (
+        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
+          <div style={{ color: "#FF9DAF", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
+            <Icons.XCircle />
+          </div>
+          <div style={styles.successTitle}>So'rov rad etildi</div>
+          <div style={styles.successSub}>
+            To'lov tasdiqlanmadi. Agar bu xato bo'lsa, @bitta_mngr ga yozing yoki qaytadan urinib ko'ring.
+          </div>
+          <button
+            style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
+            className="bt-primary-btn"
+            onClick={handleOpenTopUp}
+          >
+            Qayta urinish
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+{/* ===================== ПОЛНОЭКРАННОЕ ОКНО МАГАЗИНА ===================== */}
+{isShopOpen && activeShopType && (
+  <div 
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: '65px', // Отступ снизу, чтобы НЕ перекрывать ваше Нижнее Меню
+      background: '#0d0f17', // Тёмный фон приложения
+      zIndex: 99,
+      overflowY: 'auto',
+      display: 'flex',
+      flexDirection: 'column'
+    }}
+  >
+    {/* ВЕРХНЯЯ ПАНЕЛЬ С КНОПКОЙ «НАЗАД» */}
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '16px',
+      position: 'sticky',
+      top: 0,
+      background: '#0d0f17',
+      zIndex: 10,
+      borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+    }}>
+      <button 
+        onClick={() => {
+          haptic("light");
+          if (shopStep === 2) {
+            setShopStep(1);
+          } else {
+            setIsShopOpen(false);
+          }
+        }}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: '#FFF',
+          fontSize: '16px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}
+      >
+        ‹ Orqaga
+      </button>
+
+      {/* Аватарка и Название игры */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {gameLogos[activeShopType] ? (
+          <img 
+            src={gameLogos[activeShopType]} 
+            alt="Game Logo" 
+            style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} 
+          />
+        ) : (
+          (() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()
+        )}
+        <span style={{ fontSize: '15px', fontWeight: '700', color: '#FFF' }}>
+          {shopProducts[activeShopType].title}
+        </span>
+      </div>
+
+      {/* Пустой блок для выравнивания заголовка по центру */}
+      <div style={{ width: '60px' }}></div>
+    </div>
+
+    {/* КОНТЕНТ СТРАНИЦЫ */}
+    <div style={{ padding: '16px', flex: 1 }}>
+
+      {/* ШАГ 1: ВЫБОР ТАРИФА (СЕТКА ПАКЕТОВ) */}
       {shopStep === 1 && (
-        <div style={styles.sheetBody}>
-          <p style={styles.subLabel}>Tarifni tanlang</p>
+        <div>
+          <p style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '14px' }}>
+            Paketni tanlang
+          </p>
           
-          {/* Сетка тарифов (2 колонки для лучшей читаемости) */}
+          {/* Сетка тарифов (по 2 в ряд) */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '8px',
-            maxHeight: '340px',
-            overflowY: 'auto',
-            paddingRight: '2px'
+            gap: '10px'
           }}>
             {shopProducts[activeShopType].packs.map((pack: any, idx: number) => {
               const packIcon = pack.icon || shopImages[activeShopType];
@@ -1150,8 +1238,8 @@ const handleBuy = async () => {
                   style={{
                     background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '14px',
-                    padding: '10px 12px',
+                    borderRadius: '16px',
+                    padding: '14px 12px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -1164,28 +1252,25 @@ const handleBuy = async () => {
                     handleSelectPack(pack);
                   }}
                 >
-                  {/* Название и Цена */}
                   <div>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1.2' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1.2' }}>
                       {pack.name}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#a855f7', fontWeight: '600', marginTop: '4px' }}>
+                    <div style={{ fontSize: '12px', color: '#a855f7', fontWeight: '600', marginTop: '6px' }}>
                       {pack.price}
                     </div>
                   </div>
 
-                  {/* Иконка товара */}
                   {packIcon && (
                     <img
                       src={packIcon}
                       alt="icon"
                       style={{
-                        width: '28px',
-                        height: '28px',
+                        width: '32px',
+                        height: '32px',
                         objectFit: 'contain',
                         flexShrink: 0,
-                        transform: pack.scale ? `scale(${pack.scale})` : 'none',
-                        transition: 'transform 0.2s ease'
+                        transform: pack.scale ? `scale(${pack.scale})` : 'none'
                       }}
                     />
                   )}
@@ -1198,25 +1283,25 @@ const handleBuy = async () => {
 
       {/* ШАГ 2: ВВОД PLAYER ID И ОПЛАТА */}
       {shopStep === 2 && selectedPack && (
-        <div style={styles.sheetBody}>
-          {/* Карточка сводки заказа */}
+        <div>
+          {/* Сводка заказа */}
           <div style={{
             background: 'rgba(255, 255, 255, 0.05)',
             border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: '14px',
-            padding: '12px',
-            marginBottom: '14px',
+            padding: '14px',
+            marginBottom: '16px',
             fontSize: '13px',
             color: 'rgba(255, 255, 255, 0.7)'
           }}>
             Tanlangan paket: <span style={{ color: "#FFF", fontWeight: 700 }}>{selectedPack.name}</span>
-            <div style={{ fontSize: '14px', color: '#a855f7', fontWeight: '700', marginTop: '2px' }}>
+            <div style={{ fontSize: '15px', color: '#a855f7', fontWeight: '700', marginTop: '4px' }}>
               {selectedPack.price}
             </div>
           </div>
 
-          {/* Поле ввода ID */}
-          <div style={{ marginBottom: '14px' }}>
+          {/* Ввод ID */}
+          <div style={{ marginBottom: '16px' }}>
             <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
               {shopProducts[activeShopType].placeholder || "Player ID kiriting"}
             </p>
@@ -1230,7 +1315,7 @@ const handleBuy = async () => {
             />
           </div>
 
-          {/* Сообщение об ошибке */}
+          {/* Ошибка */}
           {buyError && (
             <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
               <span>{buyError}</span>
@@ -1246,30 +1331,27 @@ const handleBuy = async () => {
             </div>
           )}
 
-          {/* Кнопки действий */}
-          <div style={styles.btnRow}>
-            <button 
-              style={styles.btnBack} 
-              className="bt-secondary-btn" 
-              onClick={() => { haptic("light"); setShopStep(1); }}
-            >
-              Orqaga
-            </button>
-            <button
-              style={{ ...styles.btnPrimary, background: shopTheme[activeShopType]?.grad || "linear-gradient(135deg,#B98BFF,#6E6BFF)", opacity: isBuying ? 0.7 : 1 }}
-              className="bt-primary-btn"
-              onClick={() => { haptic("medium"); handleBuy(); }}
-              disabled={isBuying}
-            >
-              {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
-            </button>
-          </div>
+          {/* Кнопка Покупки */}
+          <button
+            style={{ 
+              ...styles.btnPrimary, 
+              width: '100%',
+              padding: '14px',
+              background: shopTheme[activeShopType]?.grad || "linear-gradient(135deg,#B98BFF,#6E6BFF)", 
+              opacity: isBuying ? 0.7 : 1 
+            }}
+            className="bt-primary-btn"
+            onClick={() => { haptic("medium"); handleBuy(); }}
+            disabled={isBuying}
+          >
+            {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
+          </button>
         </div>
       )}
 
       {/* ШАГ 4: УСПЕШНЫЙ ЗАКАЗ */}
       {shopStep === 4 && (
-        <div style={{ ...styles.successBox, padding: '24px 16px', textAlign: 'center' }}>
+        <div style={{ padding: '32px 16px', textAlign: 'center' }}>
           <div style={{ color: "#3DDC97", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
             <Icons.Check />
           </div>
@@ -1278,7 +1360,6 @@ const handleBuy = async () => {
             Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.
           </div>
           
-          {/* Кнопка Готово / Понятно */}
           <button
             style={{ ...styles.btnPrimary, background: "#3DDC97", color: "#000", fontWeight: "700", width: "100%" }}
             className="bt-primary-btn"
@@ -1289,9 +1370,8 @@ const handleBuy = async () => {
         </div>
       )}
     </div>
-  </>
+  </div>
 )}
-
 
 
       {/* ===================== FOOTER (ПОДВАЛ) ===================== */}
