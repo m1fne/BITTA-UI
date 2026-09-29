@@ -1,83 +1,74 @@
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-export interface InlineButton {
-  text: string;
-  callback_data: string;
-}
-
-export function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// 💡 Безопасная функция отправки запросов к Telegram без падений res.json()
-async function safeFetch(url: string, options: RequestInit) {
+/**
+ * Безопасный вызов Telegram API (не падает, если Telegram вернул не JSON)
+ */
+async function tgFetch(method: string, body: Record<string, any>) {
   if (!BOT_TOKEN) {
-    console.error("❌ TELEGRAM_BOT_TOKEN не задан в .env!");
-    return { ok: false, error: "BOT_TOKEN_MISSING" };
+    console.error("❌ TELEGRAM_BOT_TOKEN не указан в .env!");
+    return null;
   }
 
   try {
-    const res = await fetch(url, options);
-    const rawText = await res.text();
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const text = await res.text();
 
     try {
-      return JSON.parse(rawText);
+      return JSON.parse(text);
     } catch {
-      console.error(`❌ Telegram API вернул не-JSON ответ (код ${res.status}):`, rawText);
-      return { ok: false, error: "INVALID_JSON", rawText };
+      console.error(`❌ Telegram API (${method}) вернул не JSON:`, text);
+      return null;
     }
   } catch (err) {
-    console.error("❌ Ошибка сети при запросе к Telegram:", err);
-    return { ok: false, error: "NETWORK_ERROR" };
+    console.error(`❌ Сетевая ошибка при запросе к Telegram (${method}):`, err);
+    return null;
   }
 }
 
-export async function sendMessage(chatId: number, text: string, buttons?: InlineButton[][]) {
-  return safeFetch(`${API}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      reply_markup: buttons ? { inline_keyboard: buttons } : undefined,
-    }),
+export async function sendMessage(chatId: number | string, text: string) {
+  return tgFetch("sendMessage", {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
   });
 }
 
-export async function sendPhoto(chatId: number, file: Blob, filename: string, caption: string, buttons?: InlineButton[][]) {
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  form.append("caption", caption);
-  form.append("parse_mode", "HTML");
-  if (buttons) form.append("reply_markup", JSON.stringify({ inline_keyboard: buttons }));
-  form.append("photo", file, filename);
-
-  return safeFetch(`${API}/sendPhoto`, { method: "POST", body: form });
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  showAlert = false
+) {
+  return tgFetch("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    text,
+    show_alert: showAlert,
+  });
 }
 
-export async function editDecision(chatId: number, messageId: number, hasPhoto: boolean, text: string) {
-  const method = hasPhoto ? "editMessageCaption" : "editMessageText";
-  const bodyField = hasPhoto ? { caption: text } : { text };
-
-  return safeFetch(`${API}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+export async function editDecision(
+  chatId: number | string,
+  messageId: number,
+  hasPhoto: boolean,
+  text: string
+) {
+  if (hasPhoto) {
+    return tgFetch("editMessageCaption", {
       chat_id: chatId,
       message_id: messageId,
+      caption: text,
       parse_mode: "HTML",
-      reply_markup: { inline_keyboard: [] }, // Очищаем кнопки после клика
-      ...bodyField,
-    }),
-  });
-}
-
-export async function answerCallbackQuery(callbackQueryId: string, text?: string, showAlert = false) {
-  return safeFetch(`${API}/answerCallbackQuery`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ callback_query_id: callbackQueryId, text, show_alert: showAlert }),
-  });
+    });
+  } else {
+    return tgFetch("editMessageText", {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: "HTML",
+    });
+  }
 }
