@@ -98,13 +98,19 @@ export async function POST(request: Request) {
     // 2. ОБЯЗАТЕЛЬНОЕ АТОМАРНОЕ СПИСАНИЕ В SUPABASE (Защита от race condition и нулевого баланса)
     let createdOrder: any = null;
 
-    try {
+try {
       createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
     } catch (dbErr: any) {
-      if (dbErr.message?.includes('INSUFFICIENT_BALANCE')) {
+      const msg = dbErr.message || '';
+      // Если не хватает денег — отдаем понятную ошибку для клиента
+      if (
+        msg.includes('INSUFFICIENT') ||
+        msg.includes('недостаточно') ||
+        msg.includes('yetarli emas')
+      ) {
         return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
       }
-      return NextResponse.json({ error: `Ошибка базы данных: ${dbErr.message}` }, { status: 400 });
+      return NextResponse.json({ error: `Xatolik: ${dbErr.message}` }, { status: 400 });
     }
 
     // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN (Вызывается ТОЛЬКО после успешного списания денег!)

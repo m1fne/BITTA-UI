@@ -94,9 +94,15 @@ export async function purchaseWithBalance(
     p_desc: `Покупка ${service}: ${productName}`,
   });
 
-  if (balanceErr) {
-    if (balanceErr.message?.includes("INSUFFICIENT_BALANCE") || balanceErr.message?.includes("недостаточно")) {
-      throw new Error("INSUFFICIENT_BALANCE");
+if (balanceErr) {
+    const errMsg = balanceErr.message || "";
+    // Ловим любые вариации ошибки нехватки средств
+    if (
+      errMsg.includes("INSUFFICIENT") ||
+      errMsg.includes("недостаточно") ||
+      errMsg.includes("yetarli emas")
+    ) {
+      throw new Error("INSUFFICIENT_FUNDS");
     }
     throw new Error(balanceErr.message);
   }
