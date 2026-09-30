@@ -729,25 +729,25 @@ const handleBuy = async () => {
         Katalog
       </h1>
     </section>
-{/* ВИТРИНА ИГР И СЕРВИСОВ (Плотная нативная сетка) */}
+{/* ВИТРИНА ИГР И СЕРВИСОВ (Компактный 3х3 App Store стиль) */}
     <div style={{ padding: '0 12px', marginTop: '16px', marginBottom: '24px' }}>
       <div style={{ 
         fontFamily: "'Plus Jakarta Sans', sans-serif",
-        fontSize: '15px', 
+        fontSize: '14px', 
         fontWeight: '700', 
         color: '#FFFFFF', 
-        marginBottom: '12px',
-        paddingLeft: '4px'
+        marginBottom: '10px',
+        paddingLeft: '2px'
       }}>
         O'yinlar va Xizmatlar
       </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)', // 3 игры в ряд
-          gap: '8px',
-          width: '100%'
-        }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '8px',
+        width: '100%'
+      }}>
         {[
           { id: "pubg", title: "PUBG Mobile", img: "/pubg_mobile.jpg" },
           { id: "freefire", title: "Free Fire", img: "/ff_diamonds.jpg" },
@@ -762,16 +762,17 @@ const handleBuy = async () => {
               handleOpenShop(item.id as any);
             }}
             style={{
-              background: 'rgba(255, 255, 255, 0.03)',
+              background: 'rgba(255, 255, 255, 0.04)',
               border: '1px solid rgba(255, 255, 255, 0.07)',
-              borderRadius: '16px',
-              padding: '8px 8px 10px 8px', // Уменьшили внутренний padding, чтобы картинка была крупной
+              borderRadius: '14px',
+              padding: '6px 6px 8px 6px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               cursor: 'pointer',
               textAlign: 'center',
-              width: '100%'
+              width: '100%',
+              boxSizing: 'border-box'
             }}
           >
             <img 
@@ -781,19 +782,25 @@ const handleBuy = async () => {
                 width: '100%', 
                 aspectRatio: '1/1', 
                 objectFit: 'cover', 
-                borderRadius: '12px',
-                marginBottom: '8px' 
+                borderRadius: '10px',
+                marginBottom: '5px' 
               }} 
             />
-          <span style={{ 
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            fontSize: '11px', 
-            fontWeight: '700', 
-            color: '#FFFFFF', 
-            lineHeight: '1.2' 
-          }}>
-            {item.title}
-          </span>
+            <span style={{ 
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontSize: '11px', 
+              fontWeight: '700', 
+              color: '#FFFFFF', 
+              lineHeight: '1.15',
+              letterSpacing: '-0.1px',
+              wordBreak: 'break-word',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden'
+            }}>
+              {item.title}
+            </span>
           </button>
         ))}
       </div>
