@@ -1,118 +1,168 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createDeposit } from "@/lib/db";
-import { sendMessage } from "@/lib/telegram";
-import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js";
 
-export async function GET() {
-  return NextResponse.json({ status: "online" });
-}
+// Используем admin-ключ для работы с базой без ограничений RLS
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-// Проверка криптографической подписи Telegram
-function verifyInitData(initDataStr: string, botToken: string) {
-  if (!initDataStr) return { isValid: false, user: null };
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
+const ADMIN_CHAT_ID = process.env.ADMIN_TELEGRAM_IDS?.split(",")[0]?.trim();
+
+// -------------------------------------------------------------
+// 1. GET: Получение баланса пользователя или статуса депозита
+// -------------------------------------------------------------
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const initDataStr = searchParams.get("initData");
+    const depositId = searchParams.get("id");
+
+    if (!initDataStr) {
+      return NextResponse.json({ balance: 0 }, { status: 400 });
+    }
+
     const urlParams = new URLSearchParams(initDataStr);
-    const hash = urlParams.get("hash");
-    if (!hash) return { isValid: false, user: null };
-
-    urlParams.delete("hash");
-    const params: string[] = [];
-    for (const [key, value] of urlParams.entries()) {
-      params.push(`${key}=${value}`);
-    }
-    params.sort();
-    const dataCheckString = params.join("\n");
-
-    const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-    const calculatedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
-
-    if (calculatedHash !== hash) return { isValid: false, user: null };
-
     const userJson = urlParams.get("user");
-    return { isValid: true, user: userJson ? JSON.parse(userJson) : null };
-  } catch {
-    return { isValid: false, user: null };
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    let telegramId: number | null = null;
-    let username: string | null = null;
-    let amount: number | null = null;
-
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
-    const contentType = req.headers.get("content-type") || "";
-
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      amount = Number(formData.get("amount"));
-      const initDataStr = (formData.get("initData") as string) || "";
-
-      // Защита: проверяем подпись
-      const { isValid, user } = verifyInitData(initDataStr, botToken);
-      
-      // В продакшене отклоняем неподписанные запросы
-      if (isValid && user) {
-        telegramId = Number(user.id);
-        username = user.username || null;
-      } else {
-        // Запасной вариант для тестов, если подпись не прошла
-        const fallbackUser = formData.get("telegramId");
-        if (fallbackUser) telegramId = Number(fallbackUser);
-      }
-    } else {
-      const body = await req.json().catch(() => null);
-      if (body) {
-        amount = Number(body.amount);
-        telegramId = Number(body.telegramId);
-        username = body.username || null;
-      }
+    if (!userJson) {
+      return NextResponse.json({ balance: 0 }, { status: 400 });
     }
 
-    if (!amount || isNaN(amount) || amount <= 0) {
-      return NextResponse.json({ error: "INVALID_AMOUNT", minAmount: 1000 }, { status: 400 });
+    const tgUser = JSON.parse(userJson);
+    const telegramId = Number(tgUser.id);
+
+    // Проверка конкретного депозита (для интервала в useEffect)
+    if (depositId) {
+      const { data: deposit } = await supabaseAdmin
+        .from("deposits")
+        .select("*")
+        .eq("id", depositId)
+        .maybeSingle();
+
+      return NextResponse.json({ deposit });
     }
 
-    if (!telegramId || isNaN(telegramId)) {
-      return NextResponse.json({ error: "AUTH_ERROR", reason: "Telegram ID aniqlanmadi" }, { status: 400 });
-    }
+    // Чтение текущего баланса
+    const { data: user, error } = await supabaseAdmin
+      .from("users")
+      .select("balance")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
 
-    // Сохраняем в Supabase
-    const deposit = await createDeposit(telegramId, amount);
-
-    // Карточка для админа
-    const adminIds = (process.env.ADMIN_TELEGRAM_IDS || "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
-
-    const messageText =
-      `💳 <b>Yangi to'lov so'rovi!</b>\n\n` +
-      `👤 Foydalanuvchi: ${username ? `@${username}` : telegramId}\n` +
-      `🆔 Telegram ID: <code>${telegramId}</code>\n` +
-      `💰 Summa: <b>${amount.toLocaleString("uz-UZ")} so'm</b>\n\n` +
-      `📌 ID: <code>${deposit.id}</code>`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: "✅ Tasdiqlash", callback_data: `dep:approve:${deposit.id}` },
-          { text: "❌ Rad etish", callback_data: `dep:reject:${deposit.id}` },
-        ],
-      ],
-    };
-
-    for (const adminId of adminIds) {
-      await sendMessage(adminId, messageText, keyboard);
+    if (error || !user) {
+      return NextResponse.json({ balance: 0 });
     }
 
     return NextResponse.json({
-      success: true,
-      deposit: { id: deposit.id },
+      balance: Number(user.balance || 0),
     });
+  } catch (err) {
+    console.error("Ошибка в GET /api/deposit:", err);
+    return NextResponse.json({ balance: 0 }, { status: 500 });
+  }
+}
+
+// -------------------------------------------------------------
+// 2. POST: Создание новой заявки на пополнение (Депозит)
+// -------------------------------------------------------------
+export async function POST(req: NextRequest) {
+  try {
+    const formData = await req.formData();
+    const initDataStr = formData.get("initData") as string;
+    const amountStr = formData.get("amount") as string;
+    const receiptFile = formData.get("receipt") as File | null;
+
+    const amount = parseInt(amountStr, 10);
+    if (!amount || amount <= 0) {
+      return NextResponse.json({ error: "INVALID_AMOUNT", minAmount: 1000 }, { status: 400 });
+    }
+
+    if (!initDataStr) {
+      return NextResponse.json({ error: "NO_INIT_DATA" }, { status: 400 });
+    }
+
+    const urlParams = new URLSearchParams(initDataStr);
+    const userJson = urlParams.get("user");
+    if (!userJson) {
+      return NextResponse.json({ error: "INVALID_USER" }, { status: 400 });
+    }
+
+    const tgUser = JSON.parse(userJson);
+    const telegramId = Number(tgUser.id);
+    const username = tgUser.username ? `@${tgUser.username}` : "Mavjud emas";
+
+    // 1. Создаем пользователя в таблице users, если его ещё нет
+    await supabaseAdmin
+      .from("users")
+      .upsert({ telegram_id: telegramId }, { onConflict: "telegram_id" });
+
+    // 2. Создаем заявку в таблице deposits
+    const { data: deposit, error: depositErr } = await supabaseAdmin
+      .from("deposits")
+      .insert({
+        user_id: telegramId,
+        amount: amount,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (depositErr || !deposit) {
+      console.error("Ошибка записи депозита:", depositErr);
+      return NextResponse.json({ error: "DB_ERROR", reason: depositErr?.message }, { status: 500 });
+    }
+
+    // 3. Отправляем уведомление админу в Telegram
+    if (BOT_TOKEN && ADMIN_CHAT_ID) {
+      const formattedAmount = amount.toLocaleString("uz-UZ");
+      const caption =
+        `💳 <b>Yangi to'lov so'rovi!</b>\n\n` +
+        `👤 Foydalanuvchi: ${username}\n` +
+        `🆔 Telegram ID: <code>${telegramId}</code>\n` +
+        `💰 Summa: <b>${formattedAmount} so'm</b>\n\n` +
+        `📌 ID: <code>${deposit.id}</code>`;
+
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: "✅ Tasdiqlash", callback_data: `dep:approve:${deposit.id}` },
+            { text: "❌ Rad etish", callback_data: `dep:reject:${deposit.id}` },
+          ],
+        ],
+      };
+
+      // Если прикреплен чек-скриншот
+      if (receiptFile && receiptFile.size > 0) {
+        const tgForm = new FormData();
+        tgForm.append("chat_id", ADMIN_CHAT_ID);
+        tgForm.append("caption", caption);
+        tgForm.append("parse_mode", "HTML");
+        tgForm.append("reply_markup", JSON.stringify(replyMarkup));
+        tgForm.append("photo", receiptFile);
+
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+          method: "POST",
+          body: tgForm,
+        });
+      } else {
+        // Текстовое сообщение без фото
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: ADMIN_CHAT_ID,
+            text: caption,
+            parse_mode: "HTML",
+            reply_markup: replyMarkup,
+          }),
+        });
+      }
+    }
+
+    return NextResponse.json({ success: true, deposit });
   } catch (err: any) {
-    console.error("Deposit Error:", err);
+    console.error("Ошибка в POST /api/deposit:", err);
     return NextResponse.json({ error: "SERVER_ERROR", reason: err?.message }, { status: 500 });
   }
 }
