@@ -99,9 +99,9 @@ mlbb: {
     title: "Telegram Premium",
     placeholder: "Telegram Username (masalan: @username)",
     packs: [
-      { name: "3 Oy ", price: "160,000 UZS", icon: "/telegram_premium.png" },
-      { name: "6 Oy ", price: "220,000 UZS", icon: "/telegram_premium.png" },
-      { name: "12 Oy ", price: "390,000 UZS", icon: "/telegram_premium.png" },
+      { name: "3 Oy ", price: "160,000 UZS", icon: "/tg_prem_icon.png" },
+      { name: "6 Oy ", price: "220,000 UZS", icon: "/tg_prem_icon.png" },
+      { name: "12 Oy ", price: "390,000 UZS", icon: "/tg_prem_icon.png.png" },
     ],
   },
 };
@@ -116,7 +116,7 @@ const gameLogos: Record<string, string> = {
 const shopImages: Record<string, string> = {
   pubg: "/pubgmobileuc.png",
   freefire: "/ffdiamonds.png",
-  telegram: "/Telegram_Premium.png",
+  telegram: "/tg_prem_icon.png.png",
   mlbb: "/mlbbdiamonds.png",
 };
 
