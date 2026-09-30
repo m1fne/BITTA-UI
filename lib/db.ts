@@ -87,16 +87,20 @@ export async function purchaseWithBalance(
   targetId: string,
   price: number
 ) {
+  // Проверка на корректность ID
+  if (!userId || isNaN(Number(userId))) {
+    throw new Error("Foydalanuvchi Telegram ID topilmadi (userId is null/undefined)");
+  }
+
   // 1. Списываем деньги через SQL-процедуру (deduct_user_balance)
   const { data: balanceData, error: balanceErr } = await supabase.rpc("deduct_user_balance", {
-    p_telegram_id: userId,
+    p_telegram_id: Number(userId),
     p_amount: price,
     p_desc: `Покупка ${service}: ${productName}`,
   });
 
-if (balanceErr) {
+  if (balanceErr) {
     const errMsg = balanceErr.message || "";
-    // Ловим любые вариации ошибки нехватки средств
     if (
       errMsg.includes("INSUFFICIENT") ||
       errMsg.includes("недостаточно") ||
@@ -111,7 +115,7 @@ if (balanceErr) {
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .insert({
-      user_id: userId,
+      user_id: Number(userId),
       service: service,
       product_name: productName,
       target_id: targetId,
@@ -122,9 +126,8 @@ if (balanceErr) {
     .single();
 
   if (orderErr) {
-    // Если запись заказа не создалась — возвращаем деньги обратно пользователю
     await supabase.rpc("deduct_user_balance", {
-      p_telegram_id: userId,
+      p_telegram_id: Number(userId),
       p_amount: -price,
       p_desc: "Отмена: ошибка создания заказа",
     });

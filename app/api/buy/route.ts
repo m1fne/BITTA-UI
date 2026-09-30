@@ -76,7 +76,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const telegramId = authResult.user.id;
+    const telegramId = Number(authResult.user.id);
+
+    // 🛑 1.1 ПРОВЕРКА TELEGRAM ID (Защита от NULL в базе)
+    if (!telegramId || isNaN(telegramId)) {
+      return NextResponse.json(
+        { error: 'Telegram ID topilmadi. Iltimos, ilovani Telegram оркали қайта очинг.' },
+        { status: 401 }
+      );
+    }
+
     const playerIdRaw = body.targetId || body.playerId || body.player_id || body.username;
     const playerId = String(playerIdRaw || '').trim();
 
@@ -86,7 +95,7 @@ export async function POST(request: Request) {
 
     const price = Number(body.price || 0);
 
-    // 🛑 ЗАЩИТА: Если цена <= 0 или не указана — мгновенная блокировка!
+    // 🛑 ЗАЩИТА: Если цена <= 0 или не указана
     if (!price || price <= 0) {
       return NextResponse.json({ error: 'Noto\'g\'ri summa (Цена должна быть больше 0)' }, { status: 400 });
     }
@@ -95,14 +104,13 @@ export async function POST(request: Request) {
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
-    // 2. ОБЯЗАТЕЛЬНОЕ АТОМАРНОЕ СПИСАНИЕ В SUPABASE (Защита от race condition и нулевого баланса)
+    // 2. АТОМАРНОЕ СПИСАНИЕ В SUPABASE
     let createdOrder: any = null;
 
-try {
+    try {
       createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
     } catch (dbErr: any) {
       const msg = dbErr.message || '';
-      // Если не хватает денег — отдаем понятную ошибку для клиента
       if (
         msg.includes('INSUFFICIENT') ||
         msg.includes('недостаточно') ||
@@ -113,7 +121,7 @@ try {
       return NextResponse.json({ error: `Xatolik: ${dbErr.message}` }, { status: 400 });
     }
 
-    // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN (Вызывается ТОЛЬКО после успешного списания денег!)
+    // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN
     const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
@@ -143,7 +151,7 @@ try {
 
     const data = await response.json();
 
-    // 4. ЕСЛИ PAYERPIN ОШИБСЯ — АВТОМАТИЧЕСКИ ВОЗВРАЩАЕМ ДЕНЬГИ В БАЗУ
+    // 4. ВОЗВРАТ СРЕДСТВ ПРИ ОШИБКЕ PAYERPIN
     if (!response.ok || data.ok === false) {
       if (createdOrder?.id) {
         await refundOrder(createdOrder.id);
@@ -155,7 +163,7 @@ try {
       );
     }
 
-    // 5. УСПЕХ — Помечаем заказ как 'completed'
+    // 5. УСПЕХ
     if (createdOrder?.id) {
       await completeOrder(createdOrder.id);
     }
