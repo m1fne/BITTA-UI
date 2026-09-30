@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
 }
 
 // -------------------------------------------------------------
-// 2. POST: Безопасная отправка заявки
+// 2. POST: Безопасная отправка заявки (с защитой от спама)
 // -------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "NO_INIT_DATA" }, { status: 400 });
     }
 
-    // ВАЛИДАЦИЯ: Проверяем подлинность подписи
+    // 1. ВАЛИДАЦИЯ: Проверяем подлинность подписи Telegram
     if (!verifyTelegramInitData(initDataStr)) {
       return NextResponse.json({ error: "UNAUTHORIZED_INIT_DATA" }, { status: 401 });
     }
@@ -141,12 +141,30 @@ export async function POST(req: NextRequest) {
     const telegramId = Number(tgUser.id);
     const username = tgUser.username ? `@${tgUser.username}` : "Mavjud emas";
 
-    // Upsert пользователя
+    // 🛑 2. ЗАЩИТА ОТ СПАМА: Проверяем, нет ли УЖЕ незакрытой заявки
+    const { data: existingPending } = await supabaseAdmin
+      .from("deposits")
+      .select("id")
+      .eq("user_id", telegramId)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (existingPending) {
+      return NextResponse.json(
+        { 
+          error: "PENDING_DEPOSIT_EXISTS", 
+          reason: "Sizda ko'rib chiqilayotgan so'rov bor. Iltimos, adminga javobini kuting!" 
+        }, 
+        { status: 400 }
+      );
+    }
+
+    // 3. Upsert пользователя
     await supabaseAdmin
       .from("users")
       .upsert({ telegram_id: telegramId }, { onConflict: "telegram_id" });
 
-    // Создаем запись депозита
+    // 4. Создаем запись депозита
     const { data: deposit, error: depositErr } = await supabaseAdmin
       .from("deposits")
       .insert({
@@ -161,7 +179,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "DB_ERROR", reason: depositErr?.message }, { status: 500 });
     }
 
-    // Отправка уведомления админу в Telegram
+    // 5. Отправка уведомления админу в Telegram
     if (BOT_TOKEN && ADMIN_CHAT_ID) {
       const formattedAmount = amount.toLocaleString("uz-UZ");
       const caption =
