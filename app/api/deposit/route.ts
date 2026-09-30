@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
-// Используем admin-ключ для работы с базой без ограничений RLS
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -10,8 +10,46 @@ const supabaseAdmin = createClient(
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_TELEGRAM_IDS?.split(",")[0]?.trim();
 
+/**
+ * Проверка подлинности initData от Telegram
+ */
+function verifyTelegramInitData(initDataStr: string): boolean {
+  if (!initDataStr || !BOT_TOKEN) return false;
+
+  try {
+    const urlParams = new URLSearchParams(initDataStr);
+    const hash = urlParams.get("hash");
+    if (!hash) return false;
+
+    urlParams.delete("hash");
+
+    // Сортируем параметры в алфавитном порядке
+    const sortedParams = Array.from(urlParams.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n");
+
+    // Вычисляем секретный ключ HMAC-SHA256
+    const secretKey = crypto
+      .createHmac("sha256", "WebAppData")
+      .update(BOT_TOKEN)
+      .digest();
+
+    // Считаем хэш данных
+    const calculatedHash = crypto
+      .createHmac("sha256", secretKey)
+      .update(sortedParams)
+      .digest("hex");
+
+    return calculatedHash === hash;
+  } catch (err) {
+    console.error("Ошибка валидации initData:", err);
+    return false;
+  }
+}
+
 // -------------------------------------------------------------
-// 1. GET: Получение баланса пользователя или статуса депозита
+// 1. GET: Безопасное получение баланса
 // -------------------------------------------------------------
 export async function GET(req: NextRequest) {
   try {
@@ -20,19 +58,25 @@ export async function GET(req: NextRequest) {
     const depositId = searchParams.get("id");
 
     if (!initDataStr) {
-      return NextResponse.json({ balance: 0 }, { status: 400 });
+      return NextResponse.json({ error: "NO_INIT_DATA" }, { status: 400 });
+    }
+
+    // ВАЛИДАЦИЯ: Проверяем, что запрос действительно отправлен из Telegram
+    const isValid = verifyTelegramInitData(initDataStr);
+    if (!isValid) {
+      return NextResponse.json({ error: "UNAUTHORIZED_INIT_DATA" }, { status: 401 });
     }
 
     const urlParams = new URLSearchParams(initDataStr);
     const userJson = urlParams.get("user");
     if (!userJson) {
-      return NextResponse.json({ balance: 0 }, { status: 400 });
+      return NextResponse.json({ error: "INVALID_USER" }, { status: 400 });
     }
 
     const tgUser = JSON.parse(userJson);
     const telegramId = Number(tgUser.id);
 
-    // Проверка конкретного депозита (для интервала в useEffect)
+    // Проверка статуса депозита
     if (depositId) {
       const { data: deposit } = await supabaseAdmin
         .from("deposits")
@@ -43,7 +87,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ deposit });
     }
 
-    // Чтение текущего баланса
+    // Чтение баланса
     const { data: user, error } = await supabaseAdmin
       .from("users")
       .select("balance")
@@ -64,7 +108,7 @@ export async function GET(req: NextRequest) {
 }
 
 // -------------------------------------------------------------
-// 2. POST: Создание новой заявки на пополнение (Депозит)
+// 2. POST: Безопасная отправка заявки
 // -------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
@@ -73,13 +117,18 @@ export async function POST(req: NextRequest) {
     const amountStr = formData.get("amount") as string;
     const receiptFile = formData.get("receipt") as File | null;
 
-    const amount = parseInt(amountStr, 10);
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ error: "INVALID_AMOUNT", minAmount: 1000 }, { status: 400 });
-    }
-
     if (!initDataStr) {
       return NextResponse.json({ error: "NO_INIT_DATA" }, { status: 400 });
+    }
+
+    // ВАЛИДАЦИЯ: Проверяем подлинность подписи
+    if (!verifyTelegramInitData(initDataStr)) {
+      return NextResponse.json({ error: "UNAUTHORIZED_INIT_DATA" }, { status: 401 });
+    }
+
+    const amount = parseInt(amountStr, 10);
+    if (!amount || amount <= 0 || amount < 1000) {
+      return NextResponse.json({ error: "INVALID_AMOUNT", minAmount: 1000 }, { status: 400 });
     }
 
     const urlParams = new URLSearchParams(initDataStr);
@@ -92,12 +141,12 @@ export async function POST(req: NextRequest) {
     const telegramId = Number(tgUser.id);
     const username = tgUser.username ? `@${tgUser.username}` : "Mavjud emas";
 
-    // 1. Создаем пользователя в таблице users, если его ещё нет
+    // Upsert пользователя
     await supabaseAdmin
       .from("users")
       .upsert({ telegram_id: telegramId }, { onConflict: "telegram_id" });
 
-    // 2. Создаем заявку в таблице deposits
+    // Создаем запись депозита
     const { data: deposit, error: depositErr } = await supabaseAdmin
       .from("deposits")
       .insert({
@@ -109,11 +158,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (depositErr || !deposit) {
-      console.error("Ошибка записи депозита:", depositErr);
       return NextResponse.json({ error: "DB_ERROR", reason: depositErr?.message }, { status: 500 });
     }
 
-    // 3. Отправляем уведомление админу в Telegram
+    // Отправка уведомления админу в Telegram
     if (BOT_TOKEN && ADMIN_CHAT_ID) {
       const formattedAmount = amount.toLocaleString("uz-UZ");
       const caption =
@@ -132,7 +180,6 @@ export async function POST(req: NextRequest) {
         ],
       };
 
-      // Если прикреплен чек-скриншот
       if (receiptFile && receiptFile.size > 0) {
         const tgForm = new FormData();
         tgForm.append("chat_id", ADMIN_CHAT_ID);
@@ -146,7 +193,6 @@ export async function POST(req: NextRequest) {
           body: tgForm,
         });
       } else {
-        // Текстовое сообщение без фото
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
