@@ -99,9 +99,9 @@ mlbb: {
     title: "Telegram Premium",
     placeholder: "Telegram Username (masalan: @username)",
     packs: [
-      { name: "3 Oy ", price: "160,000 UZS" },
-      { name: "6 Oy ", price: "220,000 UZS" },
-      { name: "12 Oy ", price: "390,000 UZS" },
+      { name: "3 Oy ", price: "160,000 UZS", icon: "/telegram_premium.png" },
+      { name: "6 Oy ", price: "220,000 UZS", icon: "/telegram_premium.png" },
+      { name: "12 Oy ", price: "390,000 UZS", icon: "/telegram_premium.png" },
     ],
   },
 };
@@ -700,32 +700,59 @@ const handleBuy = async () => {
 {/* ===================== 1. ГЛАВНАЯ ===================== */}
 {activeView === "home" && (
   <>
-    {/* HERO / KATALOG */}
-    <section style={{ ...styles.hero, paddingBottom: '4px' }}>
-      <div style={styles.heroBadge}>
+{/* HERO / KATALOG */}
+    <section style={{ ...styles.hero, paddingBottom: '4px', paddingTop: '8px' }}>
+      <div style={{
+        ...styles.heroBadge,
+        background: 'rgba(184, 139, 255, 0.12)',
+        border: '1px solid rgba(184, 139, 255, 0.25)',
+        color: '#D1B3FF',
+        fontSize: '11px',
+        fontWeight: '600',
+        padding: '4px 10px',
+        borderRadius: '20px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px'
+      }}>
         <Icons.Sparkle /> Bitta ilovada — hammasi
       </div>
-      <h1 className="bt-display" style={{ ...styles.heroTitle, fontSize: '22px', marginTop: '6px', marginBottom: '0' }}>
+      <h1 style={{ 
+        fontFamily: "'Plus Jakarta Sans', sans-serif", 
+        fontSize: '24px', 
+        fontWeight: '800', 
+        letterSpacing: '-0.5px',
+        color: '#FFFFFF',
+        marginTop: '8px', 
+        marginBottom: '0' 
+      }}>
         Katalog
       </h1>
     </section>
-
-    {/* ВИТРИНА ИГР И СЕРВИСОВ */}
-    <div style={{ padding: '0 16px', marginTop: '16px', marginBottom: '24px' }}>
-      <div style={{ fontSize: '15px', fontWeight: '700', color: '#FFF', marginBottom: '12px' }}>
+{/* ВИТРИНА ИГР И СЕРВИСОВ (Плотная нативная сетка) */}
+    <div style={{ padding: '0 12px', marginTop: '16px', marginBottom: '24px' }}>
+      <div style={{ 
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
+        fontSize: '15px', 
+        fontWeight: '700', 
+        color: '#FFFFFF', 
+        marginBottom: '12px',
+        paddingLeft: '4px'
+      }}>
         O'yinlar va Xizmatlar
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '12px'
-      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)', // 3 игры в ряд
+          gap: '8px',
+          width: '100%'
+        }}>
         {[
-          { id: "pubg", title: "PUBG Mobile", sub: "UC to'ldirish", img: "/pubg_mobile.jpg" },
-          { id: "freefire", title: "Free Fire", sub: "Almazlar", img: "/ff_diamonds.jpg" },
-          { id: "premium", title: "TG Premium", sub: "Tezkor obuna", img: "/telegram_premium.jpg" },
-          { id: "mlbb", title: "Mobile Legends", sub: "Almazlar", img: "/mobile_legends.jpg" },
+          { id: "pubg", title: "PUBG Mobile", img: "/pubg_mobile.jpg" },
+          { id: "freefire", title: "Free Fire", img: "/ff_diamonds.jpg" },
+          { id: "premium", title: "Telegram Premium", img: "/telegram_premium.jpg" },
+          { id: "mlbb", title: "Mobile Legends", img: "/mobile_legends.jpg" },
         ].map((item) => (
           <button 
             key={item.id}
@@ -735,15 +762,16 @@ const handleBuy = async () => {
               handleOpenShop(item.id as any);
             }}
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.07)',
               borderRadius: '16px',
-              padding: '8px',
+              padding: '8px 8px 10px 8px', // Уменьшили внутренний padding, чтобы картинка была крупной
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               cursor: 'pointer',
-              textAlign: 'center'
+              textAlign: 'center',
+              width: '100%'
             }}
           >
             <img 
@@ -753,21 +781,23 @@ const handleBuy = async () => {
                 width: '100%', 
                 aspectRatio: '1/1', 
                 objectFit: 'cover', 
-                borderRadius: '12px', 
-                marginBottom: '6px' 
+                borderRadius: '12px',
+                marginBottom: '8px' 
               }} 
             />
-            <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>
-              {item.title}
-            </span>
-            <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
-              {item.sub}
-            </span>
+          <span style={{ 
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
+            fontSize: '11px', 
+            fontWeight: '700', 
+            color: '#FFFFFF', 
+            lineHeight: '1.2' 
+          }}>
+            {item.title}
+          </span>
           </button>
         ))}
       </div>
     </div>
-
     {/* РЕКЛАМА */}
     <section style={{ marginBottom: "20px", padding: "0 16px" }}>
       <div 
