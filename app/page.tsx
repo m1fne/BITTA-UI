@@ -116,7 +116,7 @@ const gameLogos: Record<string, string> = {
 const shopImages: Record<string, string> = {
   pubg: "/pubgmobileuc.png",
   freefire: "/ffdiamonds.png",
-  telegram: "/telegram_premium.png",
+  telegram: "/Telegram_Premium.png",
   mlbb: "/mlbbdiamonds.png",
 };
 
