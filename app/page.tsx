@@ -140,21 +140,8 @@ const Icons = {
     </svg>
   ),
 
-  Book: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5V4.5z" />
-    </svg>
-  ),
-  Pravaga: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  ),
-  Briefcase: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-    </svg>
-  ),
+
+
   Search: () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -304,7 +291,6 @@ const shopIcons: Record<ShopType, () => JSX.Element> = {
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [userBalance, setUserBalance] = useState(0);
 
   // ✅ Безопасное получение пользователя Telegram (не ломает Next.js на сервере)
@@ -583,24 +569,7 @@ const handleBuy = async () => {
 
 
 
-  // Поиск по всему приложению
-  const searchCatalog = [
-    { id: "g-pubg", group: "O'yin", theme: themes.pink, icon: Icons.Gamepad, title: "PUBG Mobile UC", desc: "UC hisobingizga to'ldiring", keywords: ["pubg", "uc", "oyin", "mobile"], action: () => handleOpenShop("pubg") },
-    { id: "g-ff", group: "O'yin", theme: themes.gold, icon: Icons.Diamond, title: "Free Fire Almazlar", desc: "Almaz to'ldirish", keywords: ["free fire", "ff", "almaz", "diamond"], action: () => handleOpenShop("freefire") },
-   
-    { id: "g-prem", group: "Xizmat", theme: themes.violet, icon: Icons.Premium, title: "Telegram Premium", desc: "Tezkor obuna", keywords: ["premium", "telegram", "tg"], action: () => handleOpenShop("premium") },
-    ...adPartners.map((ad) => ({ id: `ad-${ad.id}`, group: ad.badge, theme: themes.gold, icon: Icons.Sparkle, title: ad.title, desc: ad.desc, keywords: [ad.category, ad.title.toLowerCase()], action: () => openLinkInside(ad.link) })),
-  ];
 
-  const q = searchQuery.trim().toLowerCase();
-  const filteredResults = q
-    ? searchCatalog.filter((item) => item.title.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q) || item.keywords.some((k) => k.includes(q)))
-    : [];
-
-  const runResult = (action: () => void) => {
-    action();
-    setSearchQuery("");
-  };
 
   const telegramProfile = activeView === "profile" ? getTelegramProfile() : null;
 
@@ -731,146 +700,103 @@ const handleBuy = async () => {
 {/* ===================== 1. ГЛАВНАЯ ===================== */}
 {activeView === "home" && (
   <>
-    <div style={styles.searchWrapperFull}>
-      <div style={styles.searchIcon}><Icons.Search /></div>
-      <input
-        type="text"
-        placeholder="Qidiruv"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        style={styles.searchInputFull}
-        className="bt-search-input"
-      />
-      {searchQuery && (
-        <button onClick={() => setSearchQuery("")} style={styles.clearSearchBtn} className="bt-close-btn"><Icons.Close /></button>
-      )}
-    </div>
-
-    {searchQuery !== "" ? (
-      <div style={styles.resultsSection}>
-        <div style={styles.resultsHeader}>Qidiruv natijalari</div>
-        {filteredResults.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {filteredResults.map((item) => (
-              <div key={item.id} style={styles.resultCard} className="bt-row" onClick={() => runResult(item.action)}>
-                <div style={{ ...styles.resultIconBadge, background: item.theme.grad, boxShadow: `0 6px 16px ${item.theme.glow}` }}>
-                  <item.icon />
-                </div>
-                <div style={styles.resultBody}>
-                  <div style={styles.resultGroup}>{item.group}</div>
-                  <div style={styles.resultTitle}>{item.title}</div>
-                  <div style={styles.resultDesc}>{item.desc}</div>
-                </div>
-                <span style={styles.arrowRight}><Icons.ChevronRight /></span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={styles.noResults}>Hech narsa topilmadi. Boshqa so'z bilan izlab ko'ring</div>
-        )}
+    {/* HERO / KATALOG */}
+    <section style={{ ...styles.hero, paddingBottom: '4px' }}>
+      <div style={styles.heroBadge}>
+        <Icons.Sparkle /> Bitta ilovada — hammasi
       </div>
-    ) : (
-      <>
-        {/* HERO / KATALOG */}
-        <section style={{ ...styles.hero, paddingBottom: '4px' }}>
-          <div style={styles.heroBadge}>
-            <Icons.Sparkle /> Bitta ilovada — hammasi
-          </div>
-          <h1 className="bt-display" style={{ ...styles.heroTitle, fontSize: '22px', marginTop: '6px', marginBottom: '0' }}>
-            Katalog
-          </h1>
-        </section>
+      <h1 className="bt-display" style={{ ...styles.heroTitle, fontSize: '22px', marginTop: '6px', marginBottom: '0' }}>
+        Katalog
+      </h1>
+    </section>
 
-        {/* ВИТРИНА ИГР И СЕРВИСОВ */}
-        <div style={{ padding: '0 16px', marginTop: '16px', marginBottom: '24px' }}>
-          <div style={{ fontSize: '15px', fontWeight: '700', color: '#FFF', marginBottom: '12px' }}>
-            O'yinlar va Xizmatlar
-          </div>
+    {/* ВИТРИНА ИГР И СЕРВИСОВ */}
+    <div style={{ padding: '0 16px', marginTop: '16px', marginBottom: '24px' }}>
+      <div style={{ fontSize: '15px', fontWeight: '700', color: '#FFF', marginBottom: '12px' }}>
+        O'yinlar va Xizmatlar
+      </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px'
-          }}>
-            {[
-              { id: "pubg", title: "PUBG Mobile", sub: "UC to'ldirish", img: "/pubg_mobile.jpg" },
-              { id: "freefire", title: "Free Fire", sub: "Almazlar", img: "/ff_diamonds.jpg" },
-              { id: "premium", title: "TG Premium", sub: "Tezkor obuna", img: "/telegram_premium.jpg" },
-              { id: "mlbb", title: "Mobile Legends", sub: "Almazlar", img: "/mobile_legends.jpg" },
-            ].map((item) => (
-              <button 
-                key={item.id}
-                className="bt-tile" 
-                onClick={() => {
-                  haptic("light");
-                  handleOpenShop(item.id as any);
-                }}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '16px',
-                  padding: '8px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  textAlign: 'center'
-                }}
-              >
-                <img 
-                  src={item.img} 
-                  alt={item.title} 
-                  style={{ 
-                    width: '100%', 
-                    aspectRatio: '1/1', 
-                    objectFit: 'cover', 
-                    borderRadius: '12px', 
-                    marginBottom: '6px' 
-                  }} 
-                />
-                <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>
-                  {item.title}
-                </span>
-                <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
-                  {item.sub}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* РЕКЛАМА */}
-        <section style={{ marginBottom: "20px", padding: "0 16px" }}>
-          <div 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '12px'
+      }}>
+        {[
+          { id: "pubg", title: "PUBG Mobile", sub: "UC to'ldirish", img: "/pubg_mobile.jpg" },
+          { id: "freefire", title: "Free Fire", sub: "Almazlar", img: "/ff_diamonds.jpg" },
+          { id: "premium", title: "TG Premium", sub: "Tezkor obuna", img: "/telegram_premium.jpg" },
+          { id: "mlbb", title: "Mobile Legends", sub: "Almazlar", img: "/mobile_legends.jpg" },
+        ].map((item) => (
+          <button 
+            key={item.id}
             className="bt-tile" 
-            onClick={() => openTelegramLink("https://t.me/bitta_mngr")}
+            onClick={() => {
+              haptic("light");
+              handleOpenShop(item.id as any);
+            }}
             style={{
-              background: "rgba(255, 255, 255, 0.05)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              borderRadius: "16px",
-              padding: "16px",
-              cursor: "pointer"
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '8px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              textAlign: 'center'
             }}
           >
-            <div style={{ fontSize: "12px", color: "#38ef7d", fontWeight: "600", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-              <Icons.Sparkle /> Reklama xizmati
-            </div>
-            <div style={{ fontSize: "15px", fontWeight: "700", color: "#FFF", marginBottom: "4px" }}>
-              Bitta-da o'z brendingizni e'lon qiling!
-            </div>
-            <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", marginBottom: "10px" }}>
-              Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.
-            </div>
-            <span style={{ fontSize: "13px", color: "#0088cc", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
-              Murojaat qilish (@bitta_mngr) <Icons.ChevronRight />
+            <img 
+              src={item.img} 
+              alt={item.title} 
+              style={{ 
+                width: '100%', 
+                aspectRatio: '1/1', 
+                objectFit: 'cover', 
+                borderRadius: '12px', 
+                marginBottom: '6px' 
+              }} 
+            />
+            <span style={{ fontSize: '11px', fontWeight: '600', color: '#FFFFFF', lineHeight: '1.2' }}>
+              {item.title}
             </span>
-          </div>
-        </section>
-      </>
-    )}
+            <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
+              {item.sub}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* РЕКЛАМА */}
+    <section style={{ marginBottom: "20px", padding: "0 16px" }}>
+      <div 
+        className="bt-tile" 
+        onClick={() => openTelegramLink("https://t.me/bitta_mngr")}
+        style={{
+          background: "rgba(255, 255, 255, 0.05)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          borderRadius: "16px",
+          padding: "16px",
+          cursor: "pointer"
+        }}
+      >
+        <div style={{ fontSize: "12px", color: "#38ef7d", fontWeight: "600", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+          <Icons.Sparkle /> Reklama xizmati
+        </div>
+        <div style={{ fontSize: "15px", fontWeight: "700", color: "#FFF", marginBottom: "4px" }}>
+          Bitta-da o'z brendingizni e'lon qiling!
+        </div>
+        <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", marginBottom: "10px" }}>
+          Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.
+        </div>
+        <span style={{ fontSize: "13px", color: "#0088cc", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+          Murojaat qilish (@bitta_mngr) <Icons.ChevronRight />
+        </span>
+      </div>
+    </section>
   </>
 )}
-
 {/* ===================== 2. КОШЕЛЁК (HAMYON) ===================== */}
 {activeView === "wallet" && (
   <WalletView 
