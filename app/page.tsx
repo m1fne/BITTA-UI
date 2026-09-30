@@ -670,11 +670,17 @@ const handleBuy = async () => {
     </button>
   )}
 
-  <div style={styles.logoWrap}>
+<div style={styles.logoWrap}>
     <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad }}>
       <Icons.Sparkle />
     </span>
-    <span className="bt-display" style={styles.logoText}>
+    <span style={{
+      fontFamily: "'Plus Jakarta Sans', sans-serif",
+      fontWeight: 800,
+      fontSize: '20px',
+      letterSpacing: '-0.5px',
+      color: '#FFFFFF'
+    }}>
       {activeView === "home" && "bitta"}
       {activeView === "market" && "O'yin & Market"}
       {activeView === "wallet" && "Hamyon"}
