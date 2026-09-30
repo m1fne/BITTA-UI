@@ -729,7 +729,7 @@ const handleBuy = async () => {
         Katalog
       </h1>
     </section>
-{/* ВИТРИНА ИГР И СЕРВИСОВ (Сетка 3 колонки с одинаковой высотой) */}
+{/* ВИТРИНА ИГР И СЕРВИСОВ (Чистая сетка 3 колонки без внешних CSS) */}
     <div style={{ padding: '0 10px', marginTop: '16px', marginBottom: '24px' }}>
       <div style={{ 
         fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -737,7 +737,7 @@ const handleBuy = async () => {
         fontWeight: '700', 
         color: '#FFFFFF', 
         marginBottom: '10px',
-        paddingLeft: '4px'
+        paddingLeft: '2px'
       }}>
         O'yinlar va Xizmatlar
       </div>
@@ -756,16 +756,15 @@ const handleBuy = async () => {
         ].map((item) => (
           <button 
             key={item.id}
-            className="bt-tile" 
             onClick={() => {
               haptic("light");
               handleOpenShop(item.id as any);
             }}
             style={{
               background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.07)',
-              borderRadius: '14px',
-              padding: '6px 6px 8px 6px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '12px',
+              padding: '4px 4px 6px 4px', /* Минимальный padding: картинка почти вплотную к краю */
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -782,34 +781,21 @@ const handleBuy = async () => {
                 width: '100%', 
                 aspectRatio: '1/1', 
                 objectFit: 'cover', 
-                borderRadius: '10px',
-                marginBottom: '6px' 
+                borderRadius: '9px',
+                marginBottom: '4px' 
               }} 
             />
-            {/* Блок текста с фиксированной высотой для идеального выравнивания */}
-            <div style={{
-              height: '28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%'
+            <span style={{ 
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontSize: '11px', 
+              fontWeight: '700', 
+              color: '#FFFFFF', 
+              lineHeight: '1.15',
+              letterSpacing: '-0.1px',
+              wordBreak: 'break-word'
             }}>
-              <span style={{ 
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                fontSize: '11px', 
-                fontWeight: '700', 
-                color: '#FFFFFF', 
-                lineHeight: '1.15',
-                letterSpacing: '-0.1px',
-                wordBreak: 'break-word',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden'
-              }}>
-                {item.title}
-              </span>
-            </div>
+              {item.title}
+            </span>
           </button>
         ))}
       </div>
