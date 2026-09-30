@@ -101,7 +101,7 @@ mlbb: {
     packs: [
       { name: "3 Oy ", price: "160,000 UZS", icon: "/tg_prem_icon.png" },
       { name: "6 Oy ", price: "220,000 UZS", icon: "/tg_prem_icon.png" },
-      { name: "12 Oy ", price: "390,000 UZS", icon: "/tg_prem_icon.png.png" },
+      { name: "12 Oy ", price: "390,000 UZS", icon: "/tg_prem_icon.png" },
     ],
   },
 };
@@ -729,15 +729,15 @@ const handleBuy = async () => {
         Katalog
       </h1>
     </section>
-{/* ВИТРИНА ИГР И СЕРВИСОВ (Компактный 3х3 App Store стиль) */}
-    <div style={{ padding: '0 12px', marginTop: '16px', marginBottom: '24px' }}>
+{/* ВИТРИНА ИГР И СЕРВИСОВ (Сетка 3 колонки с одинаковой высотой) */}
+    <div style={{ padding: '0 10px', marginTop: '16px', marginBottom: '24px' }}>
       <div style={{ 
         fontFamily: "'Plus Jakarta Sans', sans-serif",
         fontSize: '14px', 
         fontWeight: '700', 
         color: '#FFFFFF', 
         marginBottom: '10px',
-        paddingLeft: '2px'
+        paddingLeft: '4px'
       }}>
         O'yinlar va Xizmatlar
       </div>
@@ -783,24 +783,33 @@ const handleBuy = async () => {
                 aspectRatio: '1/1', 
                 objectFit: 'cover', 
                 borderRadius: '10px',
-                marginBottom: '5px' 
+                marginBottom: '6px' 
               }} 
             />
-            <span style={{ 
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-              fontSize: '11px', 
-              fontWeight: '700', 
-              color: '#FFFFFF', 
-              lineHeight: '1.15',
-              letterSpacing: '-0.1px',
-              wordBreak: 'break-word',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
+            {/* Блок текста с фиксированной высотой для идеального выравнивания */}
+            <div style={{
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%'
             }}>
-              {item.title}
-            </span>
+              <span style={{ 
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontSize: '11px', 
+                fontWeight: '700', 
+                color: '#FFFFFF', 
+                lineHeight: '1.15',
+                letterSpacing: '-0.1px',
+                wordBreak: 'break-word',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
+              }}>
+                {item.title}
+              </span>
+            </div>
           </button>
         ))}
       </div>
