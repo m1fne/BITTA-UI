@@ -85,25 +85,29 @@ export async function POST(request: Request) {
     }
 
     const price = Number(body.price || 0);
+
+    // 🛑 ЗАЩИТА: Если цена <= 0 или не указана — мгновенная блокировка!
+    if (!price || price <= 0) {
+      return NextResponse.json({ error: 'Noto\'g\'ri summa (Цена должна быть больше 0)' }, { status: 400 });
+    }
+
     const service = body.service || '';
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
-    // 2. АТОМАРНОЕ СПИСАНИЕ В SUPABASE (Защита от race condition)
+    // 2. ОБЯЗАТЕЛЬНОЕ АТОМАРНОЕ СПИСАНИЕ В SUPABASE (Защита от race condition и нулевого баланса)
     let createdOrder: any = null;
 
-    if (price > 0) {
-      try {
-        createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
-      } catch (dbErr: any) {
-        if (dbErr.message?.includes('INSUFFICIENT_BALANCE')) {
-          return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
-        }
-        return NextResponse.json({ error: `Ошибка базы данных: ${dbErr.message}` }, { status: 400 });
+    try {
+      createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
+    } catch (dbErr: any) {
+      if (dbErr.message?.includes('INSUFFICIENT_BALANCE')) {
+        return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
       }
+      return NextResponse.json({ error: `Ошибка базы данных: ${dbErr.message}` }, { status: 400 });
     }
 
-    // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN
+    // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN (Вызывается ТОЛЬКО после успешного списания денег!)
     const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
@@ -133,7 +137,7 @@ export async function POST(request: Request) {
 
     const data = await response.json();
 
-    // 4. ЕСЛИ PAYERPIN ОШИБСЯ — АВТОМАТИЧЕСКИ ВОЗВРАЩАЕМ ДЕНЬГИ
+    // 4. ЕСЛИ PAYERPIN ОШИБСЯ — АВТОМАТИЧЕСКИ ВОЗВРАЩАЕМ ДЕНЬГИ В БАЗУ
     if (!response.ok || data.ok === false) {
       if (createdOrder?.id) {
         await refundOrder(createdOrder.id);
