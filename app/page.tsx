@@ -358,6 +358,7 @@ export default function Home() {
 
 
 
+// 1. Подключение скрипта Telegram (Твой существующий)
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-web-app.js";
@@ -372,6 +373,47 @@ export default function Home() {
     document.body.appendChild(script);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 2. [ДОБАВЛЕНО] Авто-закрытие магазина при переключении нижних табов
+  useEffect(() => {
+    setIsShopOpen(false);
+  }, [activeView]);
+
+  // 3. [ДОБАВЛЕНО] Кнопка «Назад» Telegram и жест свайпа для Android
+  useEffect(() => {
+    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+
+    const handleBack = () => {
+      setIsShopOpen(false);
+    };
+
+    if (isShopOpen) {
+      if (tg?.BackButton) {
+        tg.BackButton.show();
+        tg.BackButton.onClick(handleBack);
+      }
+
+      window.history.pushState({ modal: 'shop' }, '');
+
+      const handlePopState = () => {
+        setIsShopOpen(false);
+      };
+
+      window.addEventListener('popstate', handlePopState);
+
+      return () => {
+        if (tg?.BackButton) {
+          tg.BackButton.hide();
+          tg.BackButton.offClick(handleBack);
+        }
+        window.removeEventListener('popstate', handlePopState);
+      };
+    } else {
+      if (tg?.BackButton) {
+        tg.BackButton.hide();
+      }
+    }
+  }, [isShopOpen]);
 
   const getInitData = (): string => {
     if (typeof window === "undefined") return "";
