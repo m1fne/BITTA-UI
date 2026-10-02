@@ -15,8 +15,23 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     else if (product.includes('325')) variation_id = 'fzr_topup__pubg_mobile_auto__325_uc';
     else if (product.includes('60')) variation_id = 'fzr_topup__pubg_mobile_auto__60_uc';
 
+    // --- PRIME ---
+    else if (product.includes('prime') && product.includes('12')) variation_id = 'fzr_topup__pubg_mobile_auto__prime_12_months';
+    else if (product.includes('prime') && product.includes('6')) variation_id = 'fzr_topup__pubg_mobile_auto__prime_6_months';
+    else if (product.includes('prime') && product.includes('3')) variation_id = 'fzr_topup__pubg_mobile_auto__prime_3_months';
+    else if (product.includes('prime')) variation_id = 'fzr_topup__pubg_mobile_auto__prime_1_month';
+
+    // --- СПЕЦИАЛЬНЫЕ ПАКИ И ЭМБЛЕМЫ ---
+    else if (product.includes('first purchase')) variation_id = 'fzr_topup__pubg_mobile_auto__first_purchase_pack';
+    else if (product.includes('weekly deal') && product.includes('1')) variation_id = 'fzr_topup__pubg_mobile_auto__weekly_deal_pack_1';
+    else if (product.includes('weekly deal') && product.includes('2')) variation_id = 'fzr_topup__pubg_mobile_auto__weekly_deal_pack_2';
+    else if (product.includes('mythic emblem') && product.includes('weekly')) variation_id = 'fzr_topup__pubg_mobile_auto__weekly_mythic_emblem_value_pack';
+    else if (product.includes('mythic emblem')) variation_id = 'fzr_topup__pubg_mobile_auto__mythic_emblem_pack';
+    else if (product.includes('firearm')) variation_id = 'fzr_topup__pubg_mobile_auto__upgradable_firearm_materials_pack';
+
     return { game_key: 'pubg', variation_id };
   }
+  
 
   if (service.includes('free') || service.includes('ff')) {
     let variation_id = 'fzr_topup__free_fire_cis__110_diamonds';

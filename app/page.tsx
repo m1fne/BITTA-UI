@@ -55,19 +55,43 @@ const shopProducts: Record<
   { 
     title: string; 
     placeholder: string; 
-    packs: { name: string; price: string; icon?: string; scale?: number }[] 
+    tabs?: string[];
+    packs: { name: string; price: string; icon?: string; scale?: number; type?: 'UC' | 'SHOP' }[] 
   }
 > = {
 pubg: {
-    title: "PUBG Mobile UC",
+    title: "PUBG Mobile",
     placeholder: "Player ID (masalan: 5123456789)",
+    tabs: ["UC", "SHOP"],
     packs: [
-      { name: "60 UC", price: "13,000 UZS", icon: "/pubgmobileuc.png" },
-      { name: "325 UC", price: "58,000 UZS", icon: "/325uc.png", scale: 1.4 },
-      { name: "660 UC", price: "115,000 UZS", icon: "/660uc.png", scale: 2.5 }, // <--- ЗУМ 2.8x
-      { name: "1800 UC", price: "285,000 UZS", icon: "/1800uc.png", scale: 1.2 },
-      { name: "3850 UC", price: "560,000 UZS", icon: "/3850uc.png", scale: 1.3 },
-      { name: "8100 UC", price: "1,130,000 UZS", icon: "/8100uc.png", scale: 1.5 },
+      // ==================== UC ====================
+      { name: "60 UC", price: "13,000", icon: "/pubgmobileuc.png", type: "UC" },
+      { name: "325 UC", price: "58,000", icon: "/325uc.png", scale: 1.4, type: "UC" },
+      { name: "660 UC", price: "115,000", icon: "/660uc.png", scale: 2.5, type: "UC" },
+      { name: "1800 UC", price: "285,000", icon: "/1800uc.png", scale: 1.2, type: "UC" },
+      { name: "3850 UC", price: "560,000", icon: "/3850uc.png", scale: 1.3, type: "UC" },
+      { name: "8100 UC", price: "1,130,000", icon: "/8100uc.png", scale: 1.5, type: "UC" },
+
+      // ==================== SHOP ====================
+      // --- Prime ---
+      { name: "Prime (1 Month)", price: "14,000", icon: "/prime_month.png", type: "SHOP" },
+      { name: "Prime (3 Months)", price: "36,000", icon: "/prime_month.png", type: "SHOP" },
+      { name: "Prime (6 Months)", price: "70,000", icon: "/prime_month.png", type: "SHOP" },
+      { name: "Prime (12 Months)", price: "135,000", icon: "/prime_year.png", type: "SHOP" },
+
+      // --- Prime Plus ---
+      { name: "Prime Plus (1 Month)", price: "120,000", icon: "/prime_plus_month.png", type: "SHOP" },
+      { name: "Prime Plus (3 Months)", price: "330,000", icon: "/prime_plus_month.png", type: "SHOP" },
+      { name: "Prime Plus (6 Months)", price: "639,000", icon: "/prime_plus_month.png", type: "SHOP" },
+      { name: "Prime Plus (12 Months)", price: "1,350,000", icon: "/prime_plus_year.webp", type: "SHOP" },
+
+      // --- Паки, Эмблемы и Материалы ---
+      { name: "First Purchase Pack", price: "15,000", icon: "/first_purchase_pack.webp", type: "SHOP" },
+      { name: "Weekly Deal Pack 1", price: "15,000", icon: "/pack.webp", type: "SHOP" },
+      { name: "Weekly Deal Pack 2", price: "36,000", icon: "/pack.webp", type: "SHOP" },
+      { name: "Weekly Mythic Emblem Value Pack", price: "36,000", icon: "/pack.webp", type: "SHOP" },
+      { name: "Mythic Emblem Pack", price: "60,000", icon: "/pack_3.webp", type: "SHOP" },
+      { name: "Upgradable Firearm Materials Pack", price: "36,000", icon: "/pack_2.webp", type: "SHOP" },
     ],
   },
   freefire: {
@@ -324,7 +348,7 @@ export default function Home() {
   const [shopStep, setShopStep] = useState(1); // 1 tanlash, 2 malumot, 3 tolov, 4 tayyor
   const [selectedPack, setSelectedPack] = useState<{ name: string; price: string } | null>(null);
   const [userCredential, setUserCredential] = useState("");
-
+  const [activeTab, setActiveTab] = useState<'UC' | 'SHOP'>('UC');
   // МОДАЛКИ FAQ И ОФЕРТЫ
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
@@ -497,6 +521,7 @@ const loadBalance = async () => {
 const handleOpenShop = (type: ShopType) => {
     haptic("light");
     setActiveShopType(type);
+    setActiveTab('UC'); // <--- Автоматически открывает вкладку UC при входе
     setShopStep(1);
     setSelectedPack(null);
     setUserCredential("");
@@ -1180,67 +1205,120 @@ const handleBuy = async () => {
     {/* КОНТЕНТ СТРАНИЦЫ */}
     <div style={{ padding: '16px', flex: 1 }}>
 
-      {/* ШАГ 1: ВЫБОР ТАРИФА (СЕТКА ПАКЕТОВ) */}
-      {shopStep === 1 && (
+{/* ШАГ 1: ВЫБОР ТАРИФА (СЕТКА ПАКЕТОВ) */}
+      {shopStep === 1 && activeShopType && (
         <div>
           <p style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '14px' }}>
             Paketni tanlang
           </p>
-          
+
+          {/* ПЕРЕКЛЮЧАТЕЛЬ ВКАЛАДОК (UC / SHOP) - Показывается только у PUBG */}
+          {shopProducts[activeShopType]?.tabs && (
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              marginBottom: '16px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              padding: '4px',
+              borderRadius: '14px',
+              border: '1px solid rgba(255, 255, 255, 0.08)'
+            }}>
+              {shopProducts[activeShopType].tabs.map((tab: string) => {
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => {
+                      if (typeof haptic !== 'undefined') haptic("light");
+                      setActiveTab(tab as 'UC' | 'SHOP');
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isActive ? '#8b5cf6' : 'transparent',
+                      color: isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)',
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span>{tab === 'UC' ? '🟡' : '🎁'}</span>
+                    <span>{tab}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Сетка тарифов (по 2 в ряд) */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '10px'
           }}>
-            {shopProducts[activeShopType].packs.map((pack: any, idx: number) => {
-              const packIcon = pack.icon || shopImages[activeShopType];
+            {shopProducts[activeShopType].packs
+              .filter((pack: any) => {
+                // Если у игры есть табы (PUBG) — фильтруем по type, иначе показываем всё
+                if (!shopProducts[activeShopType]?.tabs) return true;
+                return pack.type === activeTab;
+              })
+              .map((pack: any, idx: number) => {
+                const packIcon = pack.icon || shopImages[activeShopType];
 
-              return (
-                <button
-                  key={idx}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '16px',
-                    padding: '14px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                  className="bt-pack-card"
-                  onClick={() => {
-                    haptic("light");
-                    handleSelectPack(pack);
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1.2' }}>
-                      {pack.name}
+                return (
+                  <button
+                    key={idx}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '16px',
+                      padding: '14px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                    className="bt-pack-card"
+                    onClick={() => {
+                      if (typeof haptic !== 'undefined') haptic("light");
+                      handleSelectPack(pack);
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1.2' }}>
+                        {pack.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#a855f7', fontWeight: '600', marginTop: '6px' }}>
+                        {pack.price}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#a855f7', fontWeight: '600', marginTop: '6px' }}>
-                      {pack.price}
-                    </div>
-                  </div>
 
-                  {packIcon && (
-                    <img
-                      src={packIcon}
-                      alt="icon"
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        objectFit: 'contain',
-                        flexShrink: 0,
-                        transform: pack.scale ? `scale(${pack.scale})` : 'none'
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
+                    {packIcon && (
+                      <img
+                        src={packIcon}
+                        alt="icon"
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          objectFit: 'contain',
+                          flexShrink: 0,
+                          transform: pack.scale ? `scale(${pack.scale})` : 'none'
+                        }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
           </div>
         </div>
       )}
