@@ -1,7 +1,7 @@
 "use client";
 import WalletView from "./components/wallet";
 import HistoryView from "./components/history";
-
+import Banner from "./components/banner";
 
 import { useState, useEffect, ChangeEvent } from "react";
 
@@ -773,7 +773,7 @@ const handleBuy = async () => {
 {/* ===================== 1. ГЛАВНАЯ ===================== */}
 {activeView === "home" && (
   <>
-{/* HERO / KATALOG */}
+    {/* HERO / KATALOG */}
     <section style={{ ...styles.hero, paddingBottom: '4px', paddingTop: '8px' }}>
       <div style={{
         ...styles.heroBadge,
@@ -790,13 +790,17 @@ const handleBuy = async () => {
       }}>
         <Icons.Sparkle /> Bitta ilovada — hammasi
       </div>
+
+      {/* 🚀 НАШ БАННЕР ВСТАЕТ СЮДА */}
+      <Banner />
+
       <h1 style={{ 
         fontFamily: "'Plus Jakarta Sans', sans-serif", 
         fontSize: '24px', 
         fontWeight: '800', 
         letterSpacing: '-0.5px',
         color: '#FFFFFF',
-        marginTop: '8px', 
+        marginTop: '16px', 
         marginBottom: '0' 
       }}>
         Katalog
