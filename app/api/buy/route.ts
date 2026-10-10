@@ -154,6 +154,8 @@ export async function POST(request: Request) {
     const apiKey = process.env.PAYERPIN_API_KEY || '';
     const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
+    console.log("🚀 ОТПРАВЛЯЕМ В PAYERPIN API:", JSON.stringify(payerpinPayload, null, 2));
+
     const response = await fetch('https://api.payerpin.uz/api/v2/order', {
       method: 'POST',
       headers: {
