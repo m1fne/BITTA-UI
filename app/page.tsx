@@ -349,6 +349,7 @@ export default function Home() {
   const [selectedPack, setSelectedPack] = useState<{ name: string; price: string } | null>(null);
   const [userCredential, setUserCredential] = useState("");
   const [activeTab, setActiveTab] = useState<'UC' | 'SHOP'>('UC');
+  const [serverId, setServerId] = useState('');
   // МОДАЛКИ FAQ И ОФЕРТЫ
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
@@ -601,6 +602,8 @@ const handleBuy = async () => {
           productName: selectedPack.name,
           targetId: userCredential.trim(),
           price: parseInt(selectedPack.price.replace(/[^\d]/g, ""), 10),
+          playerId: userCredential,
+          serverId: serverId,
         }),
       });
 
@@ -1388,20 +1391,53 @@ const handleBuy = async () => {
             </div>
           </div>
 
-          {/* Ввод ID */}
+        {/* Ввод ID */}
+        {activeShopType === 'mlbb' ? (
+          /* Поля для Mobile Legends (Два инпута) */
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '10px' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                User ID
+              </p>
+              <input
+                type="text"
+                placeholder="12345678"
+                value={userCredential}
+                onChange={(e) => setUserCredential(e.target.value)}
+                style={styles.input}
+                className="bt-search-input"
+              />
+            </div>
+            <div style={{ flex: '0 0 100px' }}>
+              <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
+                Zone ID
+              </p>
+              <input
+                type="text"
+                placeholder="1234"
+                value={serverId} // Убедись, что у тебя есть useState для serverId, например: const [serverId, setServerId] = useState('');
+                onChange={(e) => setServerId(e.target.value)}
+                style={styles.input}
+                className="bt-search-input"
+              />
+            </div>
+          </div>
+        ) : (
+          /* Обычное одно поле для остальных игр (PUBG, Free Fire и т.д.) */
           <div style={{ marginBottom: '16px' }}>
             <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-              {shopProducts[activeShopType].placeholder || "Player ID kiriting"}
+              {shopProducts[activeShopType]?.placeholder || "Player ID kiriting"}
             </p>
             <input
               type="text"
-              placeholder={shopProducts[activeShopType].placeholder}
+              placeholder={shopProducts[activeShopType]?.placeholder || "12345678"}
               value={userCredential}
               onChange={(e) => setUserCredential(e.target.value)}
               style={styles.input}
               className="bt-search-input"
             />
           </div>
+        )}
 
           {/* Ошибка */}
           {buyError && (

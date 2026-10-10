@@ -136,6 +136,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Xatolik: ${dbErr.message}` }, { status: 400 });
     }
 
+    // 🛑 АВТО-ПАРСИНГ ZONE_ID ИЗ PLAYER_ID (Если юзер ввел все в одно поле)
+    let finalPlayerId = playerId;
+    let finalServerId = body.serverId || body.server_id || body.zoneId || body.zone_id;
+
+    if (!finalServerId && playerId.includes('(')) {
+      const match = playerId.match(/(\d+)[\s\(_-]+(\d+)\)?/);
+      if (match) {
+        finalPlayerId = match[1];
+        finalServerId = match[2];
+      }
+    }
+    
+
     // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN
     const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
     const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
