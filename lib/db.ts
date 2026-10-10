@@ -147,13 +147,17 @@ export async function refundOrder(orderId: string | number) {
 
   if (!order) return;
 
-  // Меням статус заказа на 'failed'
-  await supabase
+  // Меняем статус заказа на 'failed' (без несуществующего updated_at)
+  const { error: updateErr } = await supabase
     .from("orders")
-    .update({ status: "failed", updated_at: new Date().toISOString() })
+    .update({ status: "failed" })
     .eq("id", orderId);
 
-  // Возвращаем средства на баланс (передаем отрицательную сумму в deduct_user_balance)
+  if (updateErr) {
+    console.error("❌ Ошибка обновления статуса заказа на failed:", updateErr.message);
+  }
+
+  // Возвращаем средства на баланс
   if (order.price > 0) {
     await supabase.rpc("deduct_user_balance", {
       p_telegram_id: order.user_id,
@@ -165,8 +169,12 @@ export async function refundOrder(orderId: string | number) {
 
 // Завершение заказа при успешной выдаче товара в PayerPin
 export async function completeOrder(orderId: string | number) {
-  await supabase
+  const { error: updateErr } = await supabase
     .from("orders")
-    .update({ status: "completed", updated_at: new Date().toISOString() })
+    .update({ status: "completed" })
     .eq("id", orderId);
+
+  if (updateErr) {
+    console.error("❌ Ошибка обновления статуса заказа на completed:", updateErr.message);
+  }
 }
