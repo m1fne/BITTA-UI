@@ -32,7 +32,6 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     return { game_key: 'pubg', variation_id };
   }
   
-
   if (service.includes('free') || service.includes('ff')) {
     let variation_id = 'fzr_topup__free_fire_cis__110_diamonds';
     if (product.includes('6160')) variation_id = 'fzr_topup__free_fire_cis__6160_diamonds';
@@ -76,6 +75,45 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
   };
 }
 
+// 🛡️ Строгий серверный справочник цен (клиент больше не может их подделать)
+const SERVER_PRICES: Record<string, number> = {
+  'fzr_topup__pubg_mobile_auto__60_uc': 13000,
+  'fzr_topup__pubg_mobile_auto__325_uc': 58000,
+  'fzr_topup__pubg_mobile_auto__660_uc': 115000,
+  'fzr_topup__pubg_mobile_auto__1800_uc': 285000,
+  'fzr_topup__pubg_mobile_auto__3850_uc': 560000,
+  'fzr_topup__pubg_mobile_auto__8100_uc': 1130000,
+  'fzr_topup__pubg_mobile_auto__prime_1_month': 14000,
+  'fzr_topup__pubg_mobile_auto__prime_3_months': 36000,
+  'fzr_topup__pubg_mobile_auto__prime_6_months': 70000,
+  'fzr_topup__pubg_mobile_auto__prime_12_months': 135000,
+  'fzr_topup__pubg_mobile_auto__first_purchase_pack': 15000,
+  'fzr_topup__pubg_mobile_auto__weekly_deal_pack_1': 15000,
+  'fzr_topup__pubg_mobile_auto__weekly_deal_pack_2': 36000,
+  'fzr_topup__pubg_mobile_auto__weekly_mythic_emblem_value_pack': 36000,
+  'fzr_topup__pubg_mobile_auto__mythic_emblem_pack': 60000,
+  'fzr_topup__pubg_mobile_auto__upgradable_firearm_materials_pack': 36000,
+
+  'fzr_topup__free_fire_cis__110_diamonds': 12000,
+  'fzr_topup__free_fire_cis__341_diamonds': 32000,
+  'fzr_topup__free_fire_cis__572_diamonds': 53000,
+  'fzr_topup__free_fire_cis__1166_diamonds': 101000,
+  'fzr_topup__free_fire_cis__2398_diamonds': 199000,
+  'fzr_topup__free_fire_cis__6160_diamonds': 495000,
+
+  'fzr_topup__mobile_legends_global__14_diamonds': 5000,
+  'fzr_topup__mobile_legends_global__42_diamonds': 11000,
+  'fzr_topup__mobile_legends_global__170_diamonds': 38000,
+  'fzr_topup__mobile_legends_global__284_diamonds': 62000,
+  'fzr_topup__mobile_legends_global__706_diamonds': 115000,
+  'fzr_topup__mobile_legends_global__1084_diamonds': 220000,
+  'fzr_topup__mobile_legends_global__3688_diamonds': 590000,
+
+  'premium_3': 160000,
+  'premium_6': 220000,
+  'premium_12': 390000,
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -108,16 +146,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Укажите Player ID' }, { status: 400 });
     }
 
-    const price = Number(body.price || 0);
-
-    // 🛑 ЗАЩИТА: Если цена <= 0 или не указана
-    if (!price || price <= 0) {
-      return NextResponse.json({ error: 'Noto\'g\'ri summa (Цена должна быть больше 0)' }, { status: 400 });
-    }
-
     const service = body.service || '';
     const productName = body.productName || '';
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
+
+    // Определяем параметры товара
+    const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
+
+    // 🛑 БЕРЕМ ЦЕНУ С СЕРВЕРА (Игнорируем то, что прислал клиент)
+    const price = SERVER_PRICES[variation_id];
+
+    if (!price || price <= 0) {
+      return NextResponse.json(
+        { error: 'Bunday mahsulot topilmadi yoki narxi noto‘g‘ri' }, 
+        { status: 400 }
+      );
+    }
 
     // 2. АТОМАРНОЕ СПИСАНИЕ В SUPABASE
     let createdOrder: any = null;
@@ -147,16 +191,14 @@ export async function POST(request: Request) {
         finalServerId = match[2];
       }
     }
-    
 
     // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN
-    const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
-    const serverId = body.serverId || body.server_id || body.zoneId || body.zone_id;
+    const serverId = finalServerId;
 
     const payerpinPayload: Record<string, any> = {
       game_key,
       variation_id,
-      player_id: playerId,
+      player_id: finalPlayerId,
     };
 
     if (serverId) {
