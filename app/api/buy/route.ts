@@ -2,12 +2,19 @@ import { NextResponse } from 'next/server';
 import { purchaseWithBalance, refundOrder, completeOrder } from '@/lib/db';
 import { debugVerifyTelegramInitData } from '@/lib/telegram-auth';
 
-function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageIdRaw: string) {
-  const service = (serviceRaw || '').toLowerCase().trim();
-  const product = (productNameRaw || packageIdRaw || '').toLowerCase().trim();
+type PayerpinParams = { game_key: string; variation_id: string };
+
+// Определяем товар. Если товар не распознан, возвращаем null (запрос будет отклонён).
+function getPayerpinParams(
+  serviceRaw: unknown,
+  productNameRaw: unknown,
+  packageIdRaw: unknown
+): PayerpinParams | null {
+  const service = String(serviceRaw || '').toLowerCase().trim();
+  const product = String(productNameRaw || packageIdRaw || '').toLowerCase().trim();
 
   if (service.includes('pubg')) {
-    let variation_id = 'fzr_topup__pubg_mobile_auto__60_uc';
+    let variation_id: string | null = null;
     if (product.includes('8100')) variation_id = 'fzr_topup__pubg_mobile_auto__8100_uc';
     else if (product.includes('3850')) variation_id = 'fzr_topup__pubg_mobile_auto__3850_uc';
     else if (product.includes('1800')) variation_id = 'fzr_topup__pubg_mobile_auto__1800_uc';
@@ -29,11 +36,11 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     else if (product.includes('mythic emblem')) variation_id = 'fzr_topup__pubg_mobile_auto__mythic_emblem_pack';
     else if (product.includes('firearm')) variation_id = 'fzr_topup__pubg_mobile_auto__upgradable_firearm_materials_pack';
 
-    return { game_key: 'pubg', variation_id };
+    return variation_id ? { game_key: 'pubg', variation_id } : null;
   }
-  
+
   if (service.includes('free') || service.includes('ff')) {
-    let variation_id = 'fzr_topup__free_fire_cis__110_diamonds';
+    let variation_id: string | null = null;
     if (product.includes('6160')) variation_id = 'fzr_topup__free_fire_cis__6160_diamonds';
     else if (product.includes('2398')) variation_id = 'fzr_topup__free_fire_cis__2398_diamonds';
     else if (product.includes('1166')) variation_id = 'fzr_topup__free_fire_cis__1166_diamonds';
@@ -43,11 +50,11 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     else if (product.includes('weekly') || product.includes('haftalik')) variation_id = 'fzr_topup__free_fire_cis__weekly_membership';
     else if (product.includes('monthly') || product.includes('oylik')) variation_id = 'fzr_topup__free_fire_cis__monthly_membership';
 
-    return { game_key: 'free-fire', variation_id };
+    return variation_id ? { game_key: 'free-fire', variation_id } : null;
   }
 
   if (service.includes('mlbb') || service.includes('legend')) {
-    let variation_id = 'fzr_topup__mobile_legends_global__14_diamonds';
+    let variation_id: string | null = null;
     if (product.includes('3688')) variation_id = 'fzr_topup__mobile_legends_global__3688_diamonds';
     else if (product.includes('1084')) variation_id = 'fzr_topup__mobile_legends_global__1084_diamonds';
     else if (product.includes('706')) variation_id = 'fzr_topup__mobile_legends_global__706_diamonds';
@@ -57,25 +64,22 @@ function getPayerpinParams(serviceRaw: string, productNameRaw: string, packageId
     else if (product.includes('14')) variation_id = 'fzr_topup__mobile_legends_global__14_diamonds';
     else if (product.includes('weekly') || product.includes('pass')) variation_id = 'fzr_topup__mobile_legends_global__weekly_pass';
 
-    return { game_key: 'mlbb', variation_id };
+    return variation_id ? { game_key: 'mlbb', variation_id } : null;
   }
 
   if (service.includes('tg') || service.includes('telegram')) {
-    let variation_id = 'premium_3';
+    let variation_id: string | null = null;
     if (product.includes('12')) variation_id = 'premium_12';
     else if (product.includes('6')) variation_id = 'premium_6';
     else if (product.includes('3')) variation_id = 'premium_3';
 
-    return { game_key: 'telegram-premium', variation_id };
+    return variation_id ? { game_key: 'telegram-premium', variation_id } : null;
   }
 
-  return {
-    game_key: service || 'pubg',
-    variation_id: packageIdRaw || productNameRaw,
-  };
+  return null;
 }
 
-// 🛡️ Строгий серверный справочник цен (клиент больше не может их подделать)
+// 🛡️ Строгий серверный справочник цен (клиент не может их подделать)
 const SERVER_PRICES: Record<string, number> = {
   'fzr_topup__pubg_mobile_auto__60_uc': 13000,
   'fzr_topup__pubg_mobile_auto__325_uc': 58000,
@@ -114,7 +118,61 @@ const SERVER_PRICES: Record<string, number> = {
   'premium_12': 390000,
 };
 
+function getServerPrice(variationId: string): number | null {
+  if (!Object.prototype.hasOwnProperty.call(SERVER_PRICES, variationId)) return null;
+  const price = SERVER_PRICES[variationId];
+  return typeof price === 'number' && price > 0 ? price : null;
+}
+
+// Уведомление админа в Telegram (если что-то требует ручной проверки)
+async function notifyAdmin(text: string) {
+  try {
+    const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
+    const chatId = process.env.ADMIN_TELEGRAM_IDS?.split(',')[0]?.trim();
+    if (!token || !chatId) return;
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+  } catch (err) {
+    console.error('Не удалось уведомить админа:', err);
+  }
+}
+
+// Запрос в Payerpin. Возвращает null, если ответа вообще не было (сеть/таймаут).
+async function callPayerpin(payload: Record<string, any>, idempotencyKey: string) {
+  try {
+    const response = await fetch('https://api.payerpin.uz/api/v2/order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.PAYERPIN_API_KEY || '',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const raw = await response.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+
+    return { httpOk: response.ok, status: response.status, data };
+  } catch (err) {
+    console.error('❌ Payerpin недоступен:', err);
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
+  // Объявляем снаружи, чтобы знать про заказ, даже если что-то упадёт позже
+  let createdOrder: any = null;
+
   try {
     const body = await request.json();
 
@@ -123,22 +181,20 @@ export async function POST(request: Request) {
     const authResult = debugVerifyTelegramInitData(initData);
 
     if (!authResult.user) {
-      return NextResponse.json(
-        { error: `Ошибка авторизации: ${authResult.reason}` },
-        { status: 401 }
-      );
+      console.warn('Авторизация не прошла:', authResult.reason);
+      return NextResponse.json({ error: 'Ошибка авторизации' }, { status: 401 });
     }
 
     const telegramId = Number(authResult.user.id);
 
-    // 🛑 1.1 ПРОВЕРКА TELEGRAM ID (Защита от NULL в базе)
     if (!telegramId || isNaN(telegramId)) {
       return NextResponse.json(
-        { error: 'Telegram ID topilmadi. Iltimos, ilovani Telegram оркали қайта очинг.' },
+        { error: 'Telegram ID topilmadi. Iltimos, ilovani Telegram орқали қайта очинг.' },
         { status: 401 }
       );
     }
 
+    // 2. Player ID: проверка формата и длины
     const playerIdRaw = body.targetId || body.playerId || body.player_id || body.username;
     const playerId = String(playerIdRaw || '').trim();
 
@@ -146,30 +202,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Укажите Player ID' }, { status: 400 });
     }
 
-    const service = body.service || '';
-    const productName = body.productName || '';
-    const packageId = body.packageId || body.package_id || body.variation_id || body.id;
-
-    // Определяем параметры товара
-    const { game_key, variation_id } = getPayerpinParams(service, productName, packageId);
-
-    // 🛑 БЕРЕМ ЦЕНУ С СЕРВЕРА (Игнорируем то, что прислал клиент)
-    const price = SERVER_PRICES[variation_id];
-
-    if (!price || price <= 0) {
-      return NextResponse.json(
-        { error: 'Bunday mahsulot topilmadi yoki narxi noto‘g‘ri' }, 
-        { status: 400 }
-      );
+    if (!/^[A-Za-z0-9_@().\-\s]{1,64}$/.test(playerId)) {
+      return NextResponse.json({ error: "Player ID noto'g'ri formatda" }, { status: 400 });
     }
 
-    // 2. АТОМАРНОЕ СПИСАНИЕ В SUPABASE
-    let createdOrder: any = null;
+    const service = String(body.service || '').slice(0, 100);
+    const productName = String(body.productName || '').slice(0, 100);
+    const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
+    // 3. Определяем товар и цену НА СЕРВЕРЕ
+    const params = getPayerpinParams(service, productName, packageId);
+    if (!params) {
+      return NextResponse.json({ error: 'Bunday mahsulot topilmadi' }, { status: 400 });
+    }
+
+    const { game_key, variation_id } = params;
+    const price = getServerPrice(variation_id);
+
+    if (!price) {
+      return NextResponse.json({ error: "Bunday mahsulot topilmadi yoki narxi noto'g'ri" }, { status: 400 });
+    }
+
+    // 4. АТОМАРНОЕ СПИСАНИЕ И СОЗДАНИЕ ЗАКАЗА В SUPABASE
     try {
       createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
     } catch (dbErr: any) {
-      const msg = dbErr.message || '';
+      const msg = dbErr?.message || '';
       if (
         msg.includes('INSUFFICIENT') ||
         msg.includes('недостаточно') ||
@@ -177,10 +235,11 @@ export async function POST(request: Request) {
       ) {
         return NextResponse.json({ error: 'Balansingiz yetarli emas.' }, { status: 400 });
       }
-      return NextResponse.json({ error: `Xatolik: ${dbErr.message}` }, { status: 400 });
+      console.error('Ошибка списания:', msg);
+      return NextResponse.json({ error: 'Xatolik yuz berdi. Qayta urinib ko‘ring.' }, { status: 400 });
     }
 
-    // 🛑 АВТО-ПАРСИНГ ZONE_ID ИЗ PLAYER_ID (Если юзер ввел все в одно поле)
+    // 5. АВТО-ПАРСИНГ ZONE_ID ИЗ PLAYER_ID (если игрок ввёл всё в одно поле)
     let finalPlayerId = playerId;
     let finalServerId = body.serverId || body.server_id || body.zoneId || body.zone_id;
 
@@ -192,56 +251,74 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. ОТПРАВКА ЗАПРОСА В PAYERPIN
-    const serverId = finalServerId;
-
     const payerpinPayload: Record<string, any> = {
       game_key,
       variation_id,
       player_id: finalPlayerId,
     };
 
-    if (serverId) {
-      payerpinPayload.server_id = String(serverId).trim();
-      payerpinPayload.zone_id = String(serverId).trim();
+    if (finalServerId) {
+      payerpinPayload.server_id = String(finalServerId).trim();
+      payerpinPayload.zone_id = String(finalServerId).trim();
     }
 
-    const apiKey = process.env.PAYERPIN_API_KEY || '';
-    const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    // Ключ идемпотентности = ID заказа: повторный запрос не создаст второй заказ у Payerpin
+    const idempotencyKey = `order-${createdOrder.id}`;
 
-    console.log("🚀 ОТПРАВЛЯЕМ В PAYERPIN API:", JSON.stringify(payerpinPayload, null, 2));
+    console.log('🚀 ОТПРАВЛЯЕМ В PAYERPIN API:', JSON.stringify(payerpinPayload));
 
-    const response = await fetch('https://api.payerpin.uz/api/v2/order', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-        'Idempotency-Key': idempotencyKey,
-      },
-      body: JSON.stringify(payerpinPayload),
-    });
+    const result = await callPayerpin(payerpinPayload, idempotencyKey);
 
-    const data = await response.json();
-
-    // 4. ВОЗВРАТ СРЕДСТВ ПРИ ОШИБКЕ PAYERPIN
-    if (!response.ok || data.ok === false) {
-      if (createdOrder?.id) {
-        await refundOrder(createdOrder.id);
-      }
-      const errMsg = data.error?.message || data.message || JSON.stringify(data);
+    // 6. НЕИЗВЕСТНЫЙ РЕЗУЛЬТАТ: нет ответа, ошибка сервера Payerpin или ответ не JSON.
+    // Заказ мог пройти, поэтому деньги автоматически НЕ возвращаем: нужна ручная проверка.
+    if (!result || !result.data || result.status >= 500) {
+      console.error('⚠️ Неизвестный результат Payerpin для заказа', createdOrder.id, result?.status);
+      await notifyAdmin(
+        `⚠️ Заказ требует проверки!\nЗаказ: ${createdOrder.order_no ?? createdOrder.id}\nID заказа: ${createdOrder.id}\nПользователь: ${telegramId}\nТовар: ${variation_id}\nСумма: ${price}\nPayerpin не дал внятного ответа (статус: ${result?.status ?? 'нет ответа'}). Статус заказа оставлен processing, деньги не возвращены.`
+      );
       return NextResponse.json(
-        { error: `Ошибка Payerpin: ${errMsg}. Pulingiz qaytarildi.` },
-        { status: response.status || 400 }
+        { error: "Buyurtma holati tekshirilmoqda. Pulingiz yo'qolmaydi, admin tez orada hal qiladi." },
+        { status: 502 }
       );
     }
 
-    // 5. УСПЕХ
-    if (createdOrder?.id) {
-      await completeOrder(createdOrder.id);
+    const { data } = result;
+
+    // 7. ЧЁТКИЙ ОТКАЗ PAYERPIN: возврат средств
+    if (!result.httpOk || data.ok === false) {
+      let refunded = false;
+      try {
+        refunded = await refundOrder(createdOrder.id);
+      } catch (refundErr) {
+        console.error('❌ Не удалось вернуть деньги за заказ', createdOrder.id, refundErr);
+        await notifyAdmin(
+          `❌ Не удалось автоматически вернуть деньги!\nID заказа: ${createdOrder.id}\nПользователь: ${telegramId}\nСумма: ${price}`
+        );
+      }
+
+      const errMsg = String(data.error?.message || data.message || 'Xatolik').slice(0, 150);
+      console.error('Payerpin отказал:', JSON.stringify(data).slice(0, 500));
+
+      return NextResponse.json(
+        { error: `Ошибка Payerpin: ${errMsg}.${refunded ? ' Pulingiz qaytarildi.' : ''}` },
+        { status: result.status || 400 }
+      );
     }
+
+    // 8. УСПЕХ
+    await completeOrder(createdOrder.id);
 
     return NextResponse.json({ success: true, order: data });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Ошибка в POST /api/buy:', error);
+
+    // Если упали уже после списания, сообщаем админу: заказ нужно проверить вручную
+    if (createdOrder?.id) {
+      await notifyAdmin(
+        `⚠️ Сбой после списания!\nID заказа: ${createdOrder.id}\nПользователь: ${createdOrder.user_id}\nСумма: ${createdOrder.price}\nПроверьте заказ вручную.`
+      );
+    }
+
+    return NextResponse.json({ error: 'Server xatosi' }, { status: 500 });
   }
 }

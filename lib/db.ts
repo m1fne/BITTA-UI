@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("⚠️ SUPABASE_SERVICE_ROLE_KEY не задан в окружении: база будет работать через публичный ключ и операции с балансом не пройдут.");
+}
+
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
@@ -76,10 +80,12 @@ export async function getUserBalance(userId: number): Promise<number> {
 }
 
 // ==========================================
-// 2. ПОКУПКИ И PAYERPIN (СНИТИЕ / ВОЗВРАТ)
+// 2. ПОКУПКИ И PAYERPIN (СПИСАНИЕ / ВОЗВРАТ)
+// Все три операции идут через SQL-функции Supabase, которые
+// блокируют строку и проверяют статус внутри одной транзакции.
 // ==========================================
 
-// Атомарное списание баланса и создание заказа
+// Атомарное списание баланса и создание заказа (статус 'processing')
 export async function purchaseWithBalance(
   userId: number,
   service: string,
@@ -87,94 +93,64 @@ export async function purchaseWithBalance(
   targetId: string,
   price: number
 ) {
-  // Проверка на корректность ID
   if (!userId || isNaN(Number(userId))) {
     throw new Error("Foydalanuvchi Telegram ID topilmadi (userId is null/undefined)");
   }
 
-  // 1. Списываем деньги через SQL-процедуру (deduct_user_balance)
-  const { data: balanceData, error: balanceErr } = await supabase.rpc("deduct_user_balance", {
-    p_telegram_id: Number(userId),
-    p_amount: price,
-    p_desc: `Покупка ${service}: ${productName}`,
+  // Защита: цена должна быть конечным числом больше нуля
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    throw new Error("BAD_PRICE");
+  }
+
+  const { data, error } = await supabase.rpc("purchase_with_balance", {
+    p_user_id: Number(userId),
+    p_service: service,
+    p_product_name: productName,
+    p_target_id: targetId,
+    p_price: price,
   });
 
-  if (balanceErr) {
-    const errMsg = balanceErr.message || "";
-    if (
-      errMsg.includes("INSUFFICIENT") ||
-      errMsg.includes("недостаточно") ||
-      errMsg.includes("yetarli emas")
-    ) {
+  if (error) {
+    const msg = error.message || "";
+    if (msg.includes("INSUFFICIENT")) {
       throw new Error("INSUFFICIENT_FUNDS");
     }
-    throw new Error(balanceErr.message);
+    throw new Error(msg);
   }
 
-  // 2. Создаем запись о покупке в таблице orders
-  const { data: order, error: orderErr } = await supabase
-    .from("orders")
-    .insert({
-      user_id: Number(userId),
-      service: service,
-      product_name: productName,
-      target_id: targetId,
-      price: price,
-      status: "pending",
-    })
-    .select()
-    .single();
-
-  if (orderErr) {
-    await supabase.rpc("deduct_user_balance", {
-      p_telegram_id: Number(userId),
-      p_amount: -price,
-      p_desc: "Отмена: ошибка создания заказа",
-    });
-    throw new Error(orderErr.message);
+  if (!data || !(data as any).id) {
+    console.error("❌ purchase_with_balance не вернула заказ:", data);
+    throw new Error("ORDER_NOT_RETURNED");
   }
 
-  return order;
+  return data;
 }
 
-// Автоматический возврат денег, если PayerPin вернул ошибку
+// Возврат денег, если PayerPin вернул ошибку.
+// Сработает только один раз и только для заказа в статусе 'processing'.
 export async function refundOrder(orderId: string | number) {
-  const { data: order } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("id", orderId)
-    .single();
+  const { error } = await supabase.rpc("refund_order", {
+    p_order_id: String(orderId),
+  });
 
-  if (!order) return;
-
-  // Меняем статус заказа на 'failed' (без несуществующего updated_at)
-  const { error: updateErr } = await supabase
-    .from("orders")
-    .update({ status: "failed" })
-    .eq("id", orderId);
-
-  if (updateErr) {
-    console.error("❌ Ошибка обновления статуса заказа на failed:", updateErr.message);
+  if (error) {
+    if ((error.message || "").includes("ORDER_ALREADY_DECIDED")) {
+      return false; // заказ уже обработан, повторный возврат не делаем
+    }
+    console.error("❌ Ошибка возврата заказа:", orderId, error.message);
+    throw new Error(error.message);
   }
 
-  // Возвращаем средства на баланс
-  if (order.price > 0) {
-    await supabase.rpc("deduct_user_balance", {
-      p_telegram_id: order.user_id,
-      p_amount: -Math.abs(order.price),
-      p_desc: `Возврат за заказ #${orderId}`,
-    });
-  }
+  return true;
 }
 
 // Завершение заказа при успешной выдаче товара в PayerPin
 export async function completeOrder(orderId: string | number) {
-  const { error: updateErr } = await supabase
-    .from("orders")
-    .update({ status: "completed" })
-    .eq("id", orderId);
+  const { error } = await supabase.rpc("complete_order", {
+    p_order_id: String(orderId),
+  });
 
-  if (updateErr) {
-    console.error("❌ Ошибка обновления статуса заказа на completed:", updateErr.message);
+  if (error && !(error.message || "").includes("ORDER_ALREADY_DECIDED")) {
+    console.error("❌ Ошибка завершения заказа:", orderId, error.message);
   }
 }
