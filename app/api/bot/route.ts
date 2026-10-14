@@ -1,11 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { getDeposit, approveDeposit, rejectDeposit } from "@/lib/db";
 import { answerCallbackQuery, editMessageText, sendMessage } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
+// Проверяем, что запрос действительно прислал Telegram (секрет задаётся в setWebhook)
+function isFromTelegram(req: NextRequest): boolean {
+  const expected = process.env.TELEGRAM_WEBHOOK_SECRET || "";
+  const received = req.headers.get("x-telegram-bot-api-secret-token") || "";
+
+  if (!expected || !received) return false;
+
+  const a = Buffer.from(expected);
+  const b = Buffer.from(received);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Выполняет второстепенное действие (уведомления) и не ломает основной процесс при ошибке
+async function safe(label: string, fn: () => Promise<unknown>) {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`Некритичная ошибка (${label}):`, err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
+    // 0. Запрос должен прийти от Telegram с верным секретом
+    if (!isFromTelegram(req)) {
+      console.warn("Webhook: неверный или отсутствующий секретный заголовок");
+      return NextResponse.json({ ok: false }, { status: 401 });
+    }
+
     const rawBody = await req.text().catch(() => "");
     if (!rawBody) return NextResponse.json({ ok: true });
 
@@ -30,66 +58,95 @@ export async function POST(req: NextRequest) {
       .map((id) => Number(id.trim()))
       .filter(Boolean);
 
-    if (adminIds.length > 0 && !adminIds.includes(fromId)) {
-      await answerCallbackQuery(callbackId, "⛔ Sizda admin huquqi yo'q!", true);
+    // 1. Только админы. Если список админов пуст, не разрешаем никому.
+    if (!fromId || !adminIds.includes(fromId)) {
+      await safe("answer-not-admin", () =>
+        answerCallbackQuery(callbackId, "⛔ Sizda admin huquqi yo'q!", true)
+      );
       return NextResponse.json({ ok: true });
     }
 
     if (data.startsWith("dep:")) {
-      const [_, action, depositId] = data.split(":");
+      const [, action, depositId] = data.split(":");
 
       try {
         const deposit = await getDeposit(depositId);
 
         if (!deposit) {
-          await answerCallbackQuery(callbackId, "So'rov topilmadi!", true);
+          await safe("answer-not-found", () =>
+            answerCallbackQuery(callbackId, "So'rov topilmadi!", true)
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        // Уже обработанная заявка
+        if (deposit.status !== "pending") {
+          await safe("answer-already", () =>
+            answerCallbackQuery(callbackId, "Bu so'rov allaqachon ko'rib chiqilgan!", true)
+          );
           return NextResponse.json({ ok: true });
         }
 
         const formattedAmount = Number(deposit.amount).toLocaleString("uz-UZ");
 
         if (action === "approve") {
+          // Критичное действие: зачисление денег
           await approveDeposit(depositId);
 
-          await editMessageText(
-            chatId,
-            messageId,
-            `✅ <b>TASDIQLANDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
+          // Остальное не должно мешать друг другу
+          await safe("edit-message", () =>
+            editMessageText(
+              chatId,
+              messageId,
+              `✅ <b>TASDIQLANDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
+            )
           );
 
-          await sendMessage(
-            deposit.user_id,
-            `🎉 <b>Hisobingiz muvaffaqiyatli to'ldirildi!</b>\n\n💰 Qo'shildi: <b>${formattedAmount} so'm</b>`
+          await safe("notify-user", () =>
+            sendMessage(
+              deposit.user_id,
+              `🎉 <b>Hisobingiz muvaffaqiyatli to'ldirildi!</b>\n\n💰 Qo'shildi: <b>${formattedAmount} so'm</b>`
+            )
           );
 
-          await answerCallbackQuery(callbackId, "To'lov tasdiqlandi ✅");
+          await safe("answer-approve", () =>
+            answerCallbackQuery(callbackId, "To'lov tasdiqlandi ✅")
+          );
         } else if (action === "reject") {
           await rejectDeposit(depositId);
 
-          await editMessageText(
-            chatId,
-            messageId,
-            `❌ <b>RAD ETILDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
+          await safe("edit-message", () =>
+            editMessageText(
+              chatId,
+              messageId,
+              `❌ <b>RAD ETILDI</b>\n💰 Summa: <b>${formattedAmount} so'm</b>\n🆔 ID: <code>${deposit.user_id}</code>`
+            )
           );
 
-          await sendMessage(
-            deposit.user_id,
-            `❌ <b>To'lov so'rovingiz rad etildi (${formattedAmount} so'm).</b>`
+          await safe("notify-user", () =>
+            sendMessage(
+              deposit.user_id,
+              `❌ <b>To'lov so'rovingiz rad etildi (${formattedAmount} so'm).</b>`
+            )
           );
 
-          await answerCallbackQuery(callbackId, "So'rov rad etildi ❌");
+          await safe("answer-reject", () =>
+            answerCallbackQuery(callbackId, "So'rov rad etildi ❌")
+          );
         }
       } catch (err: any) {
-        // 🔥 ВЫВОДИМ ТОЧНУЮ ОШИБКУ В ЛОГИ VERCEL
         console.error("ОШИБКА ОБРАБОТКИ ДЕПОЗИТА:", err);
-        
+
         const msg = err?.message || "";
-        const isProcessed = msg.includes("ALREADY_PROCESSED") || msg.includes("DEPOSIT_ALREADY_DECIDED");
-        
-        await answerCallbackQuery(
-          callbackId,
-          isProcessed ? "Bu so'rov allaqachon ko'rib chiqilgan!" : `Xatolik: ${msg || "Baza xatosi"}`,
-          true
+        const isProcessed =
+          msg.includes("ALREADY_PROCESSED") || msg.includes("DEPOSIT_ALREADY_DECIDED");
+
+        await safe("answer-error", () =>
+          answerCallbackQuery(
+            callbackId,
+            isProcessed ? "Bu so'rov allaqachon ko'rib chiqilgan!" : `Xatolik: ${msg || "Baza xatosi"}`,
+            true
+          )
         );
       }
     }
