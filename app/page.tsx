@@ -338,9 +338,13 @@ export default function Home() {
   const [topUpReceiptName, setTopUpReceiptName] = useState("");
   const [topUpReceiptFile, setTopUpReceiptFile] = useState<File | null>(null);
   const [topUpCopied, setTopUpCopied] = useState(false);
-  const [topUpStatus, setTopUpStatus] = useState<"idle" | "submitting" | "pending" | "approved" | "rejected" | "error">("idle");
+  const [topUpStatus, setTopUpStatus] = useState<"idle" | "submitting" | "pending" | "approved" | "rejected" | "expired" | "error">("idle");
   const [topUpError, setTopUpError] = useState("");
   const [depositId, setDepositId] = useState<string | null>(null);
+  const [topUpPayAmount, setTopUpPayAmount] = useState<number | null>(null);
+  const [topUpExpiresAt, setTopUpExpiresAt] = useState<number | null>(null);
+  const [topUpNow, setTopUpNow] = useState<number>(Date.now());
+  const [topUpAmountCopied, setTopUpAmountCopied] = useState(false);
 
   // МАРКЕТ / МАГАЗИН
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -513,6 +517,8 @@ const loadBalance = async () => {
     setTopUpStatus("idle");
     setTopUpError("");
     setDepositId(null);
+    setTopUpPayAmount(null);
+    setTopUpExpiresAt(null);
   };
 
   const handleReceiptUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -537,7 +543,6 @@ const loadBalance = async () => {
       const form = new FormData();
       form.append("initData", initData);
       form.append("amount", String(amount));
-      if (topUpReceiptFile) form.append("receipt", topUpReceiptFile);
 
       const res = await fetch("/api/deposit", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
@@ -545,13 +550,18 @@ const loadBalance = async () => {
         setTopUpStatus("error");
         setTopUpError(
           data.error === "INVALID_AMOUNT"
-            ? `Minimal summa: ${data.minAmount?.toLocaleString("uz-UZ")} so'm`
+            ? `Summa ${Number(data.minAmount).toLocaleString("uz-UZ")} dan ${Number(data.maxAmount).toLocaleString("uz-UZ")} so'mgacha bo'lishi kerak`
+            : data.error === "TOO_BUSY"
+            ? "Hozir band, birozdan keyin urinib ko'ring"
             : `Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`
         );
         haptic("medium");
         return;
       }
       setDepositId(data.deposit.id);
+      setTopUpPayAmount(Number(data.deposit.pay_amount));
+      setTopUpExpiresAt(new Date(data.deposit.expires_at).getTime());
+      setTopUpNow(Date.now());
       setTopUpStatus("pending");
       haptic("success");
     } catch (e) {
@@ -559,6 +569,18 @@ const loadBalance = async () => {
       setTopUpError(`Tarmoq xatosi: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
+
+  // Таймер обратного отсчёта на экране оплаты
+  useEffect(() => {
+    if (topUpStatus !== "pending") return;
+    const t = setInterval(() => setTopUpNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [topUpStatus]);
+
+  const topUpSecondsLeft = topUpExpiresAt
+    ? Math.max(0, Math.floor((topUpExpiresAt - topUpNow) / 1000))
+    : 0;
+  const topUpTimeLabel = `${String(Math.floor(topUpSecondsLeft / 60)).padStart(2, "0")}:${String(topUpSecondsLeft % 60).padStart(2, "0")}`;
 
   // МАГАЗИН
 const handleOpenShop = (type: ShopType) => {
@@ -974,21 +996,21 @@ const handleBuy = async () => {
 
 {/* ===================== ПОЛНОЭКРАННОЕ ОКНО: BALANS TO'LDIRISH ===================== */}
 {isTopUpOpen && (
-  <div 
+  <div
     style={{
       position: 'fixed',
       top: 0,
       left: 0,
       right: 0,
-      bottom: '65px', // Отступ снизу, чтобы НЕ перекрывать Нижнее Меню
-      background: '#0d0f17', // Тёмный фон приложения
+      bottom: '65px',
+      background: '#0d0f17',
       zIndex: 99,
       overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column'
     }}
   >
-    {/* ВЕРХНЯЯ ПАНЕЛЬ С КНОПКОЙ «НАЗАД / ЗАКРЫТЬ» */}
+    {/* ВЕРХНЯЯ ПАНЕЛЬ */}
     <div style={{
       display: 'flex',
       alignItems: 'center',
@@ -1000,7 +1022,7 @@ const handleBuy = async () => {
       zIndex: 10,
       borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
     }}>
-      <button 
+      <button
         onClick={() => {
           haptic("light");
           setIsTopUpOpen(false);
@@ -1020,7 +1042,6 @@ const handleBuy = async () => {
         ‹ Orqaga
       </button>
 
-      {/* Заголовок */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ color: '#a855f7', display: 'flex', alignItems: 'center' }}><Icons.Wallet /></span>
         <span style={{ fontSize: '15px', fontWeight: '700', color: '#FFF' }}>
@@ -1028,11 +1049,10 @@ const handleBuy = async () => {
         </span>
       </div>
 
-      {/* Кнопка закрытия (если разрешено статусом) */}
       <div>
-        {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected") ? (
-          <button 
-            style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex' }} 
+        {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected" || topUpStatus === "expired") ? (
+          <button
+            style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex' }}
             onClick={() => setIsTopUpOpen(false)}
           >
             <Icons.Close />
@@ -1043,35 +1063,12 @@ const handleBuy = async () => {
       </div>
     </div>
 
-    {/* КОНТЕНТ СТРАНИЦЫ */}
+    {/* КОНТЕНТ */}
     <div style={{ padding: '16px', flex: 1 }}>
       {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") ? (
         <div>
-          {/* КАРТОЧКА ДЛЯ ОПЛАТЫ */}
-          <div style={styles.paymentCard}>
-            <p style={styles.paymentText}>
-              Plastik kartamizga to'lovni amalga oshiring:
-            </p>
-            <div style={styles.cardBox}>
-              <span style={styles.cardNumber}>9860 1966 1961 4445</span>
-              <button
-                style={styles.copyBtn}
-                className="bt-copy-btn"
-                onClick={() => {
-                  navigator.clipboard.writeText("9860196619614445");
-                  haptic("light");
-                  setTopUpCopied(true);
-                  setTimeout(() => setTopUpCopied(false), 1500);
-                }}
-              >
-                {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
-              </button>
-            </div>
-            <div style={styles.cardHolder}>Karta egasi: MUSA X.</div>
-          </div>
-
           {/* ВВОД СУММЫ */}
-          <div style={{ marginTop: "16px" }}>
+          <div>
             <label style={styles.inputLabel}>To'lov summasi (UZS):</label>
             <input
               type="number"
@@ -1081,7 +1078,6 @@ const handleBuy = async () => {
               style={styles.input}
               className="bt-search-input"
             />
-            {/* КНОПКИ БЫСТРОГО ВЫБОРА СУММЫ */}
             <div style={styles.quickAmountRow}>
               {["10000", "25000", "50000", "100000"].map((amt) => (
                 <button
@@ -1099,47 +1095,102 @@ const handleBuy = async () => {
             </div>
           </div>
 
-          {/* ЗАГРУЗКА ЧЕКА */}
-          <div style={{ marginTop: "16px" }}>
-            <label style={styles.inputLabel}>To'lov chekini yuklang (rasm):</label>
-            <label style={styles.fileUploadBox} className="bt-tile">
-              <Icons.Upload />
-              <span style={{ fontSize: "13px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                {topUpReceiptName ? <><Icons.FileText /> {topUpReceiptName}</> : "Chek rasmini tanlang"}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleReceiptUpload}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
+          <p style={{ color: "#9aa0b4", fontSize: "12px", marginTop: "14px", lineHeight: 1.5 }}>
+            Keyingi qadamda karta raqami va o'tkazish uchun aniq summa ko'rsatiladi. Pul tushishi bilan balans avtomatik to'ldiriladi.
+          </p>
 
           {topUpStatus === "error" && (
             <p style={{ color: "#FF9DAF", fontSize: "12px", marginTop: "10px" }}>{topUpError}</p>
           )}
 
-          {/* КНОПКА ПОДТВЕРЖДЕНИЯ */}
           <button
             style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "24px", opacity: topUpStatus === "submitting" ? 0.7 : 1 }}
             className="bt-primary-btn"
             onClick={handleFinishTopUp}
             disabled={topUpStatus === "submitting"}
           >
-            {topUpStatus === "submitting" ? "Yuborilmoqda..." : <><Icons.Rocket /> To'lovni tasdiqlash</>}
+            {topUpStatus === "submitting" ? "Yuborilmoqda..." : <><Icons.Rocket /> Davom etish</>}
           </button>
         </div>
       ) : topUpStatus === "pending" ? (
-        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
-          <div style={{ color: "#FFD166", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
-            <Icons.Clock />
+        topUpSecondsLeft > 0 ? (
+          <div>
+            {/* КАРТА */}
+            <div style={styles.paymentCard}>
+              <p style={styles.paymentText}>
+                Quyidagi kartaga <b>aniq shu summani</b> o'tkazing:
+              </p>
+              <div style={styles.cardBox}>
+                <span style={styles.cardNumber}>9860 1966 1961 4445</span>
+                <button
+                  style={styles.copyBtn}
+                  className="bt-copy-btn"
+                  onClick={() => {
+                    navigator.clipboard.writeText("9860196619614445");
+                    haptic("light");
+                    setTopUpCopied(true);
+                    setTimeout(() => setTopUpCopied(false), 1500);
+                  }}
+                >
+                  {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
+                </button>
+              </div>
+              <div style={styles.cardHolder}>Karta egasi: MUSA X.</div>
+            </div>
+
+            {/* ТОЧНАЯ СУММА */}
+            <div style={{ marginTop: "16px" }}>
+              <label style={styles.inputLabel}>O'tkazish summasi (UZS):</label>
+              <div style={styles.cardBox}>
+                <span style={styles.cardNumber}>
+                  {topUpPayAmount !== null ? topUpPayAmount.toLocaleString("uz-UZ") : ""}
+                </span>
+                <button
+                  style={styles.copyBtn}
+                  className="bt-copy-btn"
+                  onClick={() => {
+                    if (topUpPayAmount !== null) {
+                      navigator.clipboard.writeText(String(topUpPayAmount));
+                    }
+                    haptic("light");
+                    setTopUpAmountCopied(true);
+                    setTimeout(() => setTopUpAmountCopied(false), 1500);
+                  }}
+                >
+                  {topUpAmountCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
+                </button>
+              </div>
+              <p style={{ color: "#FFD166", fontSize: "12px", marginTop: "8px", lineHeight: 1.5 }}>
+                Summani o'zgartirmang! Aynan shu summa bo'lishi kerak, aks holda to'lov avtomatik tanilmaydi.
+              </p>
+            </div>
+
+            {/* ТАЙМЕР */}
+            <div style={{ marginTop: "16px", textAlign: "center", color: "#FFF", fontSize: "15px", fontWeight: 700 }}>
+              ⏳ {topUpTimeLabel}
+            </div>
+            <div style={{ ...styles.successSub, textAlign: "center", marginTop: "8px" }}>
+              Pul tushgach balans avtomatik to'ldiriladi — bu oynani yopmasangiz ham bo'ladi.
+            </div>
           </div>
-          <div style={styles.successTitle}>Tekshirilmoqda...</div>
-          <div style={styles.successSub}>
-            To'lov so'rovingiz adminga yuborildi. Tasdiqlangach bu oyna avtomatik yangilanadi — hech narsa qilish shart emas.
+        ) : (
+          <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
+            <div style={{ color: "#FFD166", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
+              <Icons.Clock />
+            </div>
+            <div style={styles.successTitle}>Vaqt tugadi</div>
+            <div style={styles.successSub}>
+              Agar to'lov qilgan bo'lsangiz, bir necha daqiqa kuting yoki @bitta_mngr ga yozing. Aks holda qaytadan urinib ko'ring.
+            </div>
+            <button
+              style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
+              className="bt-primary-btn"
+              onClick={handleOpenTopUp}
+            >
+              Qayta urinish
+            </button>
           </div>
-        </div>
+        )
       ) : topUpStatus === "approved" ? (
         <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
           <div style={{ color: "#3DDC97", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
@@ -1157,7 +1208,7 @@ const handleBuy = async () => {
             Tushunarli
           </button>
         </div>
-      ) : (
+      ) : topUpStatus === "rejected" ? (
         <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
           <div style={{ color: "#FF9DAF", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
             <Icons.XCircle />
@@ -1165,6 +1216,23 @@ const handleBuy = async () => {
           <div style={styles.successTitle}>So'rov rad etildi</div>
           <div style={styles.successSub}>
             To'lov tasdiqlanmadi. Agar bu xato bo'lsa, @bitta_mngr ga yozing yoki qaytadan urinib ko'ring.
+          </div>
+          <button
+            style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
+            className="bt-primary-btn"
+            onClick={handleOpenTopUp}
+          >
+            Qayta urinish
+          </button>
+        </div>
+      ) : (
+        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
+          <div style={{ color: "#FFD166", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
+            <Icons.Clock />
+          </div>
+          <div style={styles.successTitle}>Vaqt tugadi</div>
+          <div style={styles.successSub}>
+            Agar to'lov qilgan bo'lsangiz, @bitta_mngr ga yozing. Aks holda qaytadan urinib ko'ring.
           </div>
           <button
             style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
