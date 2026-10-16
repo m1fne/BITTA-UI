@@ -8,6 +8,18 @@ export const dynamic = "force-dynamic";
 // Последние 4 цифры карты, на которую принимаем платежи (как в сообщении: HUMOCARD *4445)
 const EXPECTED_CARD_LAST4 = process.env.PAYMENT_CARD_LAST4 || "4445";
 
+// Фразы из наших собственных сообщений боту-админу: такие тексты никогда не обрабатываем,
+// иначе предупреждение, пришедшее в Telegram, будет снова отправлено на сервер (петля)
+const SELF_MARKERS = [
+  "Не удалось разобрать сообщение банка",
+  "Пришёл платёж, но подходящей заявки нет",
+  "Ошибка автопополнения",
+  "Заказ требует проверки",
+  "Сбой после списания",
+  "Не удалось автоматически вернуть деньги",
+  "Hisobingiz muvaffaqiyatli",
+];
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -101,6 +113,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, result: "empty" });
     }
 
+    // Защита от петли: наши собственные сообщения не обрабатываем вообще
+    if (SELF_MARKERS.some((marker) => text.includes(marker))) {
+      return NextResponse.json({ ok: true, result: "self" });
+    }
+
     const parsed = parseHumoMessage(text);
 
     // Зачисляем только поступления на нашу карту
@@ -152,8 +169,8 @@ export async function POST(req: NextRequest) {
       await notifyAdmin(
         `⚠️ Пришёл платёж, но подходящей заявки нет.\n\n${escapeHtml(text)}\n\nПроверьте вручную.`
       );
-    } else if (result === "ignored" && direction === "unknown" && /UZS/i.test(text)) {
-      // Похоже на сообщение банка, но разобрать не удалось
+    } else if (result === "ignored" && direction === "unknown" && /humocard/i.test(text)) {
+      // Похоже на сообщение Humo Card, но разобрать не удалось
       await notifyAdmin(
         `⚠️ Не удалось разобрать сообщение банка:\n\n${escapeHtml(text)}`
       );
