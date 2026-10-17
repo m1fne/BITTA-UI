@@ -50,7 +50,7 @@ function getPayerpinParams(
     else if (product.includes('weekly') || product.includes('haftalik')) variation_id = 'fzr_topup__free_fire_cis__weekly_membership';
     else if (product.includes('monthly') || product.includes('oylik')) variation_id = 'fzr_topup__free_fire_cis__monthly_membership';
 
-    return variation_id ? { game_key: 'free-fire', variation_id } : null;
+    return variation_id ? { game_key: 'freefire', variation_id } : null;
   }
 
   if (service.includes('mlbb') || service.includes('legend')) {
