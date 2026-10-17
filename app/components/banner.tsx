@@ -2,12 +2,24 @@
 
 import { useState, useEffect } from 'react';
 
-const BANNERS = [
+type BannerItem = {
+  id: number;
+  src: string;
+  alt: string;
+  action?: 'contest'; // если указано, баннер кликабельный
+};
+
+const BANNERS: BannerItem[] = [
   { id: 1, src: '/banner1.jpg', alt: 'PUBG Mobile ARZON UC' },
   { id: 2, src: '/banner2.jpg', alt: 'Free Fire ARZON ALMOSLAR' },
+  { id: 3, src: '/konkurs.jpg', alt: 'Bitta konkurs — UC yuting', action: 'contest' },
 ];
 
-export default function Banner() {
+type BannerProps = {
+  onContestClick?: () => void;
+};
+
+export default function Banner({ onContestClick }: BannerProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -37,17 +49,21 @@ export default function Banner() {
         transform: `translateX(-${currentIndex * 100}%)`,
       }}>
         {BANNERS.map((banner) => (
-          <div 
-            key={banner.id} 
+          <div
+            key={banner.id}
+            onClick={() => {
+              if (banner.action === 'contest' && onContestClick) onContestClick();
+            }}
             style={{
               minWidth: '100%',
               height: '150px', // ЖЕСТКАЯ ВЫСОТА
               position: 'relative',
+              cursor: banner.action ? 'pointer' : 'default',
             }}
           >
-            <img 
-              src={banner.src} 
-              alt={banner.alt} 
+            <img
+              src={banner.src}
+              alt={banner.alt}
               style={{
                 width: '100%',
                 height: '100%',

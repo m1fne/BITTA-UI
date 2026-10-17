@@ -896,6 +896,7 @@ const handleBuy = async () => {
   </button>
 </header>
 
+
 {/* ===================== 1. ГЛАВНАЯ ===================== */}
 {activeView === "home" && (
   <>
@@ -918,7 +919,7 @@ const handleBuy = async () => {
       </div>
 
       {/* 🚀 НАШ БАННЕР ВСТАЕТ СЮДА */}
-      <Banner />
+      <Banner onContestClick={() => setIsContestOpen(true)} />
 
       <h1 style={{ 
         fontFamily: "'Plus Jakarta Sans', sans-serif", 
