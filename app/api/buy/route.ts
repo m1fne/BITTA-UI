@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { purchaseWithBalance, refundOrder, completeOrder } from '@/lib/db';
+import { purchaseWithBalance, refundOrder, completeOrder, supabase } from '@/lib/db';
 import { debugVerifyTelegramInitData } from '@/lib/telegram-auth';
 
 type PayerpinParams = { game_key: string; variation_id: string };
@@ -307,6 +307,17 @@ export async function POST(request: Request) {
 
     // 8. УСПЕХ
     await completeOrder(createdOrder.id);
+
+    // Конкурс: билет за первую покупку (на результат покупки не влияет)
+    try {
+      await supabase.rpc('contest_grant_ticket', {
+        p_user_id: telegramId,
+        p_reason: 'purchase',
+        p_ref: String(createdOrder.id),
+      });
+    } catch (contestErr) {
+      console.error('Конкурс: не удалось выдать билет за покупку', contestErr);
+    }
 
     return NextResponse.json({ success: true, order: data });
   } catch (error: any) {
