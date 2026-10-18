@@ -636,6 +636,16 @@ const loadBalance = async () => {
 
   useEffect(() => {
     loadContest();
+
+    // Ссылка вида t.me/bitta_hub_bot?startapp=contest сразу открывает экран конкурса
+    try {
+      const sp = new URLSearchParams(getInitData()).get("start_param") || "";
+      if (sp.startsWith("contest") || sp.startsWith("ref_")) {
+        setIsContestOpen(true);
+      }
+    } catch {
+      // ничего не делаем
+    }
   }, []);
 
   // Кнопка «Tekshirish»
