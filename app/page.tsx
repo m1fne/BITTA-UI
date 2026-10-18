@@ -681,6 +681,34 @@ const loadBalance = async () => {
     );
   };
 
+    // Кнопка/жест «назад» закрывает только экран конкурса, а не всё приложение
+  useEffect(() => {
+    if (!isContestOpen) return;
+
+    const tg = (window as any)?.Telegram?.WebApp;
+    if (!tg || !tg.BackButton) return;
+
+    const handleBack = () => {
+      setIsContestOpen(false);
+    };
+
+    try {
+      tg.BackButton.show();
+      tg.BackButton.onClick(handleBack);
+    } catch {
+      return;
+    }
+
+    return () => {
+      try {
+        tg.BackButton.offClick(handleBack);
+        tg.BackButton.hide();
+      } catch {
+        // ничего не делаем
+      }
+    };
+  }, [isContestOpen]);
+
   // Таймер обратного отсчёта на экране оплаты
   useEffect(() => {
     if (topUpStatus !== "pending") return;
@@ -1180,27 +1208,27 @@ const handleBuy = async () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                   <div>
                     <div style={{ color: '#FFF', fontSize: '15px', fontWeight: 700 }}>Valyuta sotib olish</div>
-                    <div style={{ color: '#9aa0b4', fontSize: '12px', marginTop: '2px' }}>Katalogdan istalgan paket · +1 chipta</div>
+                    <div style={{ color: '#9aa0b4', fontSize: '12px', marginTop: '2px' }}>
+                      Har bir xarid uchun +1 chipta (cheklovsiz)
+                    </div>
                   </div>
-                  {contest.purchase_done && (
+                  {contest.purchase_count > 0 && (
                     <div style={{ color: '#3DDC97', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Icons.Check /> +1
+                      <Icons.Check /> +{contest.purchase_count}
                     </div>
                   )}
                 </div>
-                {!contest.purchase_done && (
-                  <div style={{ marginTop: '10px' }}>
-                    <button
-                      style={contestBtnStyle}
-                      onClick={() => {
-                        haptic("light");
-                        setIsContestOpen(false);
-                      }}
-                    >
-                      Valyuta sotib olish
-                    </button>
-                  </div>
-                )}
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    style={contestBtnStyle}
+                    onClick={() => {
+                      haptic("light");
+                      setIsContestOpen(false);
+                    }}
+                  >
+                    Valyuta sotib olish
+                  </button>
+                </div>
               </div>
 
               {contestMsg && (

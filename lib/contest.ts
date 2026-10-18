@@ -115,6 +115,7 @@ export async function getContestState(userId: number) {
     tickets: list,
     channel_done: list.some((t: any) => t.reason === "channel"),
     purchase_done: list.some((t: any) => t.reason === "purchase"),
+    purchase_count: list.filter((t: any) => t.reason === "purchase").length,
     friends: {
       counted: friendTickets,
       invited: (refs || []).length,
