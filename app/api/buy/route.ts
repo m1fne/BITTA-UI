@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { purchaseWithBalance, refundOrder, completeOrder, supabase } from '@/lib/db';
 import { debugVerifyTelegramInitData } from '@/lib/telegram-auth';
 
-type PayerpinParams = { game_key: string; variation_id: string };
+type LudovexParams = { game_key: string; variation_id: string };
 
 // Определяем товар. Если товар не распознан, возвращаем null (запрос будет отклонён).
-function getPayerpinParams(
+function getLudovexParams(
   serviceRaw: unknown,
   productNameRaw: unknown,
   packageIdRaw: unknown
-): PayerpinParams | null {
+): LudovexParams | null {
   const service = String(serviceRaw || '').toLowerCase().trim();
   const product = String(productNameRaw || packageIdRaw || '').toLowerCase().trim();
 
@@ -141,17 +141,22 @@ async function notifyAdmin(text: string) {
   }
 }
 
-// Запрос в Payerpin. Возвращает null, если ответа вообще не было (сеть/таймаут).
-async function callPayerpin(payload: Record<string, any>, idempotencyKey: string) {
+// Запрос в Ludovex API. Возвращает null, если ответа вообще не было (сеть/таймаут).
+async function callLudovex(payload: Record<string, any>, idempotencyKey: string) {
   try {
-    const response = await fetch('https://api.payerpin.uz/api/v2/order', {
+    // Согласно документации Ludovex, idempotency_key передается внутри JSON тела запроса
+    const bodyWithIdempotency = {
+      ...payload,
+      idempotency_key: idempotencyKey,
+    };
+
+    const response = await fetch('https://ludovex.org/api/v2/order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.PAYERPIN_API_KEY || '',
-        'Idempotency-Key': idempotencyKey,
+        'X-API-Key': process.env.LUDOVEX_API_KEY || process.env.PAYERPIN_API_KEY || '',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(bodyWithIdempotency),
     });
 
     const raw = await response.text();
@@ -164,13 +169,12 @@ async function callPayerpin(payload: Record<string, any>, idempotencyKey: string
 
     return { httpOk: response.ok, status: response.status, data };
   } catch (err) {
-    console.error('❌ Payerpin недоступен:', err);
+    console.error('❌ Ludovex недоступен:', err);
     return null;
   }
 }
 
 export async function POST(request: Request) {
-  // Объявляем снаружи, чтобы знать про заказ, даже если что-то упадёт позже
   let createdOrder: any = null;
 
   try {
@@ -211,7 +215,7 @@ export async function POST(request: Request) {
     const packageId = body.packageId || body.package_id || body.variation_id || body.id;
 
     // 3. Определяем товар и цену НА СЕРВЕРЕ
-    const params = getPayerpinParams(service, productName, packageId);
+    const params = getLudovexParams(service, productName, packageId);
     if (!params) {
       return NextResponse.json({ error: 'Bunday mahsulot topilmadi' }, { status: 400 });
     }
@@ -251,30 +255,29 @@ export async function POST(request: Request) {
       }
     }
 
-    const payerpinPayload: Record<string, any> = {
+    const ludovexPayload: Record<string, any> = {
       game_key,
       variation_id,
       player_id: finalPlayerId,
     };
 
     if (finalServerId) {
-      payerpinPayload.server_id = String(finalServerId).trim();
-      payerpinPayload.zone_id = String(finalServerId).trim();
+      ludovexPayload.server_id = String(finalServerId).trim();
+      ludovexPayload.zone_id = String(finalServerId).trim();
     }
 
-    // Ключ идемпотентности = ID заказа: повторный запрос не создаст второй заказ у Payerpin
+    // Ключ идемпотентности = ID заказа
     const idempotencyKey = `order-${createdOrder.id}`;
 
-    console.log('🚀 ОТПРАВЛЯЕМ В PAYERPIN API:', JSON.stringify(payerpinPayload));
+    console.log('🚀 ОТПРАВЛЯЕМ В LUDOVEX API:', JSON.stringify(ludovexPayload));
 
-    const result = await callPayerpin(payerpinPayload, idempotencyKey);
+    const result = await callLudovex(ludovexPayload, idempotencyKey);
 
-    // 6. НЕИЗВЕСТНЫЙ РЕЗУЛЬТАТ: нет ответа, ошибка сервера Payerpin или ответ не JSON.
-    // Заказ мог пройти, поэтому деньги автоматически НЕ возвращаем: нужна ручная проверка.
+    // 6. НЕИЗВЕСТНЫЙ РЕЗУЛЬТАТ: нет ответа, ошибка сервера Ludovex или ответ не JSON.
     if (!result || !result.data || result.status >= 500) {
-      console.error('⚠️ Неизвестный результат Payerpin для заказа', createdOrder.id, result?.status);
+      console.error('⚠️ Неизвестный результат Ludovex для заказа', createdOrder.id, result?.status);
       await notifyAdmin(
-        `⚠️ Заказ требует проверки!\nЗаказ: ${createdOrder.order_no ?? createdOrder.id}\nID заказа: ${createdOrder.id}\nПользователь: ${telegramId}\nТовар: ${variation_id}\nСумма: ${price}\nPayerpin не дал внятного ответа (статус: ${result?.status ?? 'нет ответа'}). Статус заказа оставлен processing, деньги не возвращены.`
+        `⚠️ Заказ требует проверки!\nЗаказ: ${createdOrder.order_order_no ?? createdOrder.id}\nID заказа: ${createdOrder.id}\nПользователь: ${telegramId}\nТовар: ${variation_id}\nСумма: ${price}\nLudovex не дал внятного ответа (статус: ${result?.status ?? 'нет ответа'}). Статус заказа оставлен processing, деньги не возвращены.`
       );
       return NextResponse.json(
         { error: "Buyurtma holati tekshirilmoqda. Pulingiz yo'qolmaydi, admin tez orada hal qiladi." },
@@ -284,7 +287,7 @@ export async function POST(request: Request) {
 
     const { data } = result;
 
-    // 7. ЧЁТКИЙ ОТКАЗ PAYERPIN: возврат средств
+    // 7. ЧЁТКИЙ ОТКАЗ LUDOVEX: возврат средств
     if (!result.httpOk || data.ok === false) {
       let refunded = false;
       try {
@@ -297,10 +300,10 @@ export async function POST(request: Request) {
       }
 
       const errMsg = String(data.error?.message || data.message || 'Xatolik').slice(0, 150);
-      console.error('Payerpin отказал:', JSON.stringify(data).slice(0, 500));
+      console.error('Ludovex отказал:', JSON.stringify(data).slice(0, 500));
 
       return NextResponse.json(
-        { error: `Ошибка Payerpin: ${errMsg}.${refunded ? ' Pulingiz qaytarildi.' : ''}` },
+        { error: `Ошибка Ludovex: ${errMsg}.${refunded ? ' Pulingiz qaytarildi.' : ''}` },
         { status: result.status || 400 }
       );
     }
@@ -308,7 +311,7 @@ export async function POST(request: Request) {
     // 8. УСПЕХ
     await completeOrder(createdOrder.id);
 
-    // Конкурс: билет за первую покупку (на результат покупки не влияет)
+    // Конкурс: билет за первую покупку
     try {
       await supabase.rpc('contest_grant_ticket', {
         p_user_id: telegramId,
@@ -323,7 +326,6 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Ошибка в POST /api/buy:', error);
 
-    // Если упали уже после списания, сообщаем админу: заказ нужно проверить вручную
     if (createdOrder?.id) {
       await notifyAdmin(
         `⚠️ Сбой после списания!\nID заказа: ${createdOrder.id}\nПользователь: ${createdOrder.user_id}\nСумма: ${createdOrder.price}\nПроверьте заказ вручную.`
