@@ -1,49 +1,72 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { supabase, refundOrder, completeOrder } from '@/lib/db';
-
-function verifyLudovexSignature(payload: string, signature: string | null, secret: string) {
-  if (!signature || !secret) return true;
-
-  try {
-    const computedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(payload)
-      .digest('hex');
-
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(computedSignature)
-    );
-  } catch (err) {
-    console.error('Ошибка проверки подписи Webhook:', err);
-    return false;
-  }
-}
+import { refundOrder, completeOrder } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
-    const rawBody = await request.text();
-    const signature = request.headers.get('x-ludovex-signature') || request.headers.get('x-signature');
-    const secret = process.env.LUDOVEX_WEBHOOK_SECRET || '';
+    const secret = process.env.LUDOVEX_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
 
-    if (secret && !verifyLudovexSignature(rawBody, signature, secret)) {
-      console.warn('⚠️ Webhook отклонён: неверная подпись');
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    // 1. Получаем заголовки от Ludovex
+    const ts = request.headers.get('X-Ludovex-Timestamp') || request.headers.get('x-ludovex-timestamp');
+    const sig = request.headers.get('X-Ludovex-Signature') || request.headers.get('x-ludovex-signature');
+    const deliveryId = request.headers.get('X-Ludovex-Delivery-Id') || request.headers.get('x-ludovex-delivery-id');
+
+    // Читаем сырое тело запроса (Buffer/text)
+    const rawText = await request.text();
+    const rawBuffer = Buffer.from(rawText, 'utf-8');
+
+    // 2. Валидация заголовков и штампа времени (не более 300 секунд разницы)
+    if (
+      !/^\d{10}$/.test(ts ?? '') ||
+      Math.abs(Date.now() / 1000 - Number(ts)) > 300 ||
+      !/^sha256=[a-f0-9]{64}$/.test(sig ?? '')
+    ) {
+      console.warn('⚠️ Ludovex Webhook: Неверные заголовки или истёк timestamp');
+      return new NextResponse(null, { status: 401 });
     }
 
-    let body: any = {};
+    // 3. Проверка HMAC-SHA256 подписи
+    if (secret) {
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(ts + '.')
+        .update(rawBuffer)
+        .digest();
+
+      const received = Buffer.from((sig ?? '').slice(7), 'hex');
+
+      if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+        console.warn('⚠️ Ludovex Webhook: Неверная подпись');
+        return new NextResponse(null, { status: 401 });
+      }
+    }
+
+    // 4. Парсинг JSON
+    let event: any;
     try {
-      body = JSON.parse(rawBody);
+      event = JSON.parse(rawText);
     } catch {
-      // Если пришла просто тестовая строка или проверка
-      return NextResponse.json({ "validation.in": "ok", success: true }, { status: 200 });
+      return new NextResponse(null, { status: 400 });
     }
 
-    console.log('📥 Получен Webhook от Ludovex:', JSON.stringify(body));
+    if (!event || typeof event.event !== 'string' || !event.data || typeof event.data !== 'object') {
+      return new NextResponse(null, { status: 400 });
+    }
 
-    const event = body.event || body.type;
-    const data = body.data || body;
+    // 5. ТЕСТОВОЕ СОБЫТИЕ LUDOVEX (Возвращаем статус 204 No Content!)
+    if (event.event === 'test') {
+      console.log('✅ Получен успешный тестовый вебхук от Ludovex');
+      return new NextResponse(null, { status: 204 });
+    }
+
+    // Проверка Delivery-Id для реальных событий
+    if (!/^[1-9]\d{0,19}$/.test(deliveryId ?? '')) {
+      return new NextResponse(null, { status: 400 });
+    }
+
+    // 6. Обработка боевых событий заказа
+    const eventName = event.event;
+    const data = event.data;
 
     const idempotencyKey = data.idempotency_key || data.merchant_order_id;
     let orderId: number | string | null = null;
@@ -55,40 +78,32 @@ export async function POST(request: Request) {
     }
 
     if (orderId) {
-      // Обработка успешного выполнения заказа
-      if (event === 'order.completed' || data.status === 'completed' || data.status === 'success') {
+      // Успешный заказ
+      if (eventName === 'order.completed' || data.status === 'completed') {
         console.log(`✅ Заказ #${orderId} успешно выполнен в Ludovex`);
         await completeOrder(Number(orderId));
       }
 
-      // Обработка отмены/ошибки (возврат средств)
+      // Отмена / возврат
       if (
-        event === 'order.failed' ||
-        event === 'order.refunded' ||
+        eventName === 'order.failed' ||
+        eventName === 'order.refunded' ||
         data.status === 'failed' ||
-        data.status === 'canceled' ||
-        data.status === 'refunded'
+        data.status === 'canceled'
       ) {
-        console.log(`❌ Заказ #${orderId} отменён в Ludovex. Возвращаем средства...`);
+        console.log(`❌ Заказ #${orderId} отменён в Ludovex. Возврат средств...`);
         try {
           await refundOrder(Number(orderId));
         } catch (refundErr) {
-          console.error(`Ошибка возврата средств за заказ #${orderId}:`, refundErr);
+          console.error(`Ошибка возврата за заказ #${orderId}:`, refundErr);
         }
       }
     }
 
-    // Возвращаем точный ответ для прохождения валидации
-    return NextResponse.json(
-      {
-        "validation.in": "ok",
-        "success": true,
-        "message": "Webhook processed"
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error('❌ Ошибка в Webhook Ludovex:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    // На все боевые события Ludovex ожидает 204 No Content
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error('❌ Ошибка обработки Webhook Ludovex:', error);
+    return new NextResponse(null, { status: 500 });
   }
 }
