@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const gameKey = searchParams.get('game');
+  const query = searchParams.get('game')?.toLowerCase() || '';
   const apiKey = process.env.LUDOVEX_API_KEY || '';
   
   const headers = { 
@@ -11,100 +11,39 @@ export async function GET(request: Request) {
   };
 
   try {
-    // 1. Если game не передан — отдаем полный список доступных игр с Ludovex
-    if (!gameKey) {
-      const res = await fetch('https://api.ludovex.org/api/v2/catalog', {
-        headers,
-        cache: 'no-store',
-      });
-      const data = await res.json();
-      const rawGames = data.data || data;
-      
-      const games = Array.isArray(rawGames)
-        ? rawGames.map((g: any) => ({
-            game_key: g.game_key || g.key || g.id,
-            name: g.name || g.title,
-          }))
-        : [];
+    const res = await fetch('https://api.ludovex.org/api/v2/catalog', {
+      headers,
+      cache: 'no-store',
+    });
+    
+    const json = await res.json();
+    const rawData = json.data || json;
 
-      return NextResponse.json({
-        instruction: 'Откройте ?game=game_key для просмотра пакетов конкретной игры',
-        available_games: games,
-      });
+    if (!Array.isArray(rawData)) {
+      return NextResponse.json({ error: "Не удалось получить список от Ludovex", raw: json }, { status: 500 });
     }
 
-    // 2. Если запрашивают PUBG — опрашиваем сразу и pubg, и pubg_g2bulk (если поддерживается)
-    const keysToFetch = gameKey.toLowerCase().includes('pubg')
-      ? Array.from(new Set([gameKey, 'pubg', 'pubg_g2bulk']))
-      : [gameKey];
+    // Если передали поиск (например, ?game=blood или ?game=mlbb) — ищем совпадения
+    const games = rawData.map((g: any) => ({
+      game_key: g.game_key, // Тот самый длинный ключ для запроса пакетов
+      base_game_key: g.base_game_key,
+      name: g.name,         // Нормальное человеческое название (например, "Mobile Legends (Malaysia)")
+      region: g.region_label,
+      currency: g.currency,
+      from_price: g.from_price
+    }));
 
-    let allPackages: any[] = [];
-
-    for (const key of keysToFetch) {
-      try {
-        const res = await fetch(
-          `https://api.ludovex.org/api/v2/catalog/${encodeURIComponent(key)}`,
-          { headers, cache: 'no-store' }
-        );
-
-        if (!res.ok) continue;
-
-        const json = await res.json();
-        const rawData = json.data || json;
-
-        let itemsToParse: any[] = [];
-
-        // Разбираем структуру данных (массивы или объекты key-value)
-        if (Array.isArray(rawData)) {
-          itemsToParse = rawData;
-        } else if (typeof rawData === 'object' && rawData !== null) {
-          const possibleArray =
-            rawData.variations || rawData.items || rawData.products || rawData.packages;
-
-          if (Array.isArray(possibleArray)) {
-            itemsToParse = possibleArray;
-          } else if (typeof possibleArray === 'object' && possibleArray !== null) {
-            itemsToParse = Object.entries(possibleArray).map(([k, v]: [string, any]) => ({
-              key: k,
-              ...(typeof v === 'object' ? v : { name: k, price: v }),
-            }));
-          } else {
-            itemsToParse = Object.entries(rawData).map(([k, v]: [string, any]) => ({
-              key: k,
-              ...(typeof v === 'object' ? v : { name: k, price: v }),
-            }));
-          }
-        }
-
-        // Преобразуем каждую позицию в чистый формат
-        for (const item of itemsToParse) {
-          const id = item.id ?? item.variation_id ?? item.key ?? item.code;
-          const name = item.name ?? item.title ?? item.label ?? item.key ?? id;
-          const price = item.price ?? item.amount ?? item.cost ?? 0;
-
-          if (id) {
-            allPackages.push({
-              variation_id: String(id),
-              name: String(name),
-              price: Number(price) || 0,
-            });
-          }
-        }
-      } catch (e) {
-        // Игнорируем ошибки отдельного ключа
-      }
-    }
-
-    // Удаляем дубликаты
-    const uniquePackages = Array.from(
-      new Map(allPackages.map((item) => [item.variation_id, item])).values()
-    );
+    // Если в строке запроса что-то передали, фильтруем по названию
+    const filtered = query 
+      ? games.filter((g: any) => g.name.toLowerCase().includes(query))
+      : games;
 
     return NextResponse.json({
-      game: gameKey,
-      total_packs: uniquePackages.length,
-      packages: uniquePackages,
+      total: filtered.length,
+      instruction: 'Используйте ?game=часть_названия для поиска (например, /api/catalog?game=mobile или /api/catalog?game=blood)',
+      games: filtered,
     });
+
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
