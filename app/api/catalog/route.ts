@@ -3,21 +3,27 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const gameKey = searchParams.get('game');
-  const apiKey = process.env.PAYERPIN_API_KEY || '';
-  const headers = { 'X-API-Key': apiKey };
+  const apiKey = process.env.LUDOVEX_API_KEY || '';
+  
+  const headers = { 
+    'X-API-Key': apiKey,
+    'Accept': 'application/json'
+  };
 
   try {
-    // 1. Если game не передан — отдаем полный список доступных игр
+    // 1. Если game не передан — отдаем полный список доступных игр с Ludovex
     if (!gameKey) {
-      const res = await fetch('https://api.payerpin.uz/api/v2/catalog', {
+      const res = await fetch('https://api.ludovex.org/api/v2/catalog', {
         headers,
         cache: 'no-store',
       });
       const data = await res.json();
-      const games = Array.isArray(data.data)
-        ? data.data.map((g: any) => ({
-            game_key: g.game_key,
-            name: g.name,
+      const rawGames = data.data || data;
+      
+      const games = Array.isArray(rawGames)
+        ? rawGames.map((g: any) => ({
+            game_key: g.game_key || g.key || g.id,
+            name: g.name || g.title,
           }))
         : [];
 
@@ -27,7 +33,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // 2. Если запрашивают PUBG — опрашиваем сразу и pubg, и pubg_g2bulk
+    // 2. Если запрашивают PUBG — опрашиваем сразу и pubg, и pubg_g2bulk (если поддерживается)
     const keysToFetch = gameKey.toLowerCase().includes('pubg')
       ? Array.from(new Set([gameKey, 'pubg', 'pubg_g2bulk']))
       : [gameKey];
@@ -37,7 +43,7 @@ export async function GET(request: Request) {
     for (const key of keysToFetch) {
       try {
         const res = await fetch(
-          `https://api.payerpin.uz/api/v2/catalog/${encodeURIComponent(key)}`,
+          `https://api.ludovex.org/api/v2/catalog/${encodeURIComponent(key)}`,
           { headers, cache: 'no-store' }
         );
 
@@ -48,7 +54,7 @@ export async function GET(request: Request) {
 
         let itemsToParse: any[] = [];
 
-        // Разбираем любую структуру Payerpin (массивы или объекты key-value)
+        // Разбираем структуру данных (массивы или объекты key-value)
         if (Array.isArray(rawData)) {
           itemsToParse = rawData;
         } else if (typeof rawData === 'object' && rawData !== null) {
