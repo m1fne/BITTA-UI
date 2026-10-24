@@ -34,7 +34,7 @@ declare global {
   }
 }
 
-type ShopType = "pubg" | "freefire" | "premium" | "mlbb";
+type ShopType = "pubg" | "freefire" | "premium" | "mlbb" | "bloodstrike";
 
 
 // ===================== ДАННЫЕ =====================
@@ -119,6 +119,19 @@ mlbb: {
       { name: "3688 diamonds", price: "590 000 so'm" },
     ],
   },
+    bloodstrike: {
+    title: "Blood Strike",
+    placeholder: "Player ID kiriting (masalan: 1234567890)",
+    packs: [
+      { name: "51 BC", price: "8,000 so'm" },
+      { name: "105 BC", price: "12,000 so'm" },
+      { name: "320 BC", price: "34,000 so'm" },
+      { name: "540 BC", price: "50,000 so'm" },
+      { name: "1100 BC", price: "96,000 so'm" },
+      { name: "2260 BC", price: "190,000 so'm" },
+      { name: "5800 BC", price: "473,000 so'm" },
+    ],
+  },
   premium: {
     title: "Telegram Premium",
     placeholder: "Telegram Username (masalan: @username)",
@@ -135,6 +148,7 @@ const gameLogos: Record<string, string> = {
   freefire: "/ff_diamonds.jpg",
   premium: "/telegram_premium.jpg",
   mlbb: "/mobile_legends.jpg",
+  bloodstrike: "/bloodstrike.jpg",
 };
 
 const shopImages: Record<string, string> = {
@@ -142,6 +156,7 @@ const shopImages: Record<string, string> = {
   freefire: "/ffdiamonds.png",
   telegram: "/tg_prem_icon.png.png",
   mlbb: "/mlbbdiamonds.png",
+  bloodstrike: "/bloodstrikebc.png",
 };
 
 // ===================== ИКОНКИ =====================
@@ -293,6 +308,7 @@ const shopTheme: Record<ShopType, typeof themes.pink> = {
   freefire: themes.gold,
   premium: themes.violet,
   mlbb: themes.teal, // Добавили тему для Mobile Legends
+    bloodstrike: themes.pink,
 };
 
 // Иконки для заголовков модалок (вместо emoji)
@@ -307,7 +323,15 @@ const shopIcons: Record<ShopType, () => JSX.Element> = {
       style={{ width: "20px", height: "20px", borderRadius: "4px", objectFit: "cover" }} 
     />
   ),
+    bloodstrike: () => (
+    <img 
+      src="/bloodstrike.jpg" 
+      alt="Blood Strike" 
+      style={{ width: "20px", height: "20px", borderRadius: "4px", objectFit: "cover" }} 
+        />
+  ),
 };
+
 
 
 
@@ -995,6 +1019,7 @@ const handleBuy = async () => {
           { id: "freefire", title: "Free Fire", img: "/ff_diamonds.jpg" },
           { id: "premium", title: "Telegram Premium", img: "/telegram_premium.jpg" },
           { id: "mlbb", title: "Mobile Legends", img: "/mobile_legends.jpg" },
+          { id: "bloodstrike", title: "Blood Strike", img: "/bloodstrike.jpg" },
         ].map((item) => (
           <button 
             key={item.id}
