@@ -8,7 +8,7 @@ type LudovexParams = { game_key: string; variation_id: string };
 const PUBG = {
   uc60: 'lvxa_s_O1fmdN0H9_Vb9f1PCxW7Ynot2lkxBm3KvuJhFDpSxwSwSwZwP3728RgVkXz3CEU-OItcuZXjx8-WFTa34Asgg',
   uc325: 'lvxa_s_wPEwbMld6w4bRLbPY_jZHM2xRodrFWCGiEbjqtUftuCQMOthwNhN3sgfARVtq5G39qxk1dytklz3YQS73EOk',
-  uc660: 'lvxa_s_7EHYSVj-yAhGpFIZMbuzVFfLZWGypJPz9owPCFbKqOuJCSejyM1mt5VzL-I1AWTY7IglhjiKPw16WO2vAtC',
+  uc660: 'lvxa_s_7EHYSVj-yAhGpFIZMbuzVFfLZWGypJPz9owPCFbKqOuJCSejyM1mt5VzL-I1AWTY7IglhjiKPw16WO2vAtCR',
   uc1800: 'lvxa_s_SJNWDazLfKR-FwOK94LW0tjvj_KRLGc1nzb6kt7XfcVloGeHpeVHdG2emwDWkELtx2HGXrnBysaPKes0gWKtHg',
   uc3850: 'lvxa_s_bVCgf6UMMj8X3c-9qa5JR7nuuQ1o61Zh3z5FT709PxcTYRt5XoPW-64qexhHBVWX4UZQOrZJxrea3vSRcAk0fQ',
   uc8100: 'lvxa_s_fY90khrTH-nffxG7br-LK-li5Q6kA0nq6qIMX4CC86yHKdmIhHn0R9zlV2HAE3wl23mNERmdD1HOnOhfjJV0zQ',
