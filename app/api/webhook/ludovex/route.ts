@@ -152,10 +152,30 @@ export async function POST(request: Request) {
       if (eventObj.event === 'order.completed') {
         await completeOrder(orderId);
       } else {
+        // Смотрим статус заказа ДО возврата: refund_order срабатывает только для заказа в статусе processing.
+        let statusBefore: string | null = null;
+        try {
+          const { data: orderRow } = await supabase
+            .from('orders')
+            .select('status')
+            .eq('id', orderId)
+            .maybeSingle();
+          statusBefore = orderRow?.status ?? null;
+        } catch {
+          statusBefore = null;
+        }
+
         const refunded = await refundOrder(orderId);
-        await notifyAdmin(
-          `ℹ️ Ludovex: ${eventObj.event} по заказу #${orderId}. Возврат ${refunded ? 'выполнен' : 'не потребовался (уже возвращён или заказ не в нужном статусе)'}.`
-        );
+
+        if (refunded) {
+          await notifyAdmin(`✅ Ludovex: ${eventObj.event} по заказу #${orderId}. Деньги клиенту возвращены автоматически.`);
+        } else if (statusBefore && /refund|cancel|reject/i.test(statusBefore)) {
+          console.log(`Заказ #${orderId} уже возвращён ранее, ничего не делаем.`);
+        } else {
+          await notifyAdmin(
+            `🚨 Ludovex: ${eventObj.event} по заказу #${orderId}, но автоматический возврат НЕ выполнен (статус заказа: ${statusBefore ?? 'неизвестен'}). Если клиент не получил товар, верните деньги вручную.`
+          );
+        }
       }
     }
 

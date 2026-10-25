@@ -268,6 +268,20 @@ async function callLudovex(payload: Record<string, any>, idempotencyKey: string)
 }
 
 
+
+// Статус заказа из ответа Ludovex на создание (формат ответа в документации не описан)
+function extractLudovexStatus(data: any): string | null {
+  const candidates = [data?.status, data?.data?.status, data?.order?.status, data?.result?.status];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim().toUpperCase();
+  }
+  return null;
+}
+
+// Статусы, при которых заказ точно выполнен и можно завершать его сразу.
+// Всё остальное (в обработке, неизвестно) завершает вебхук order.completed.
+const FINAL_LUDOVEX_STATUSES = ['PAID', 'COMPLETED', 'DONE', 'SUCCESS', 'DELIVERED'];
+
 // Достаём ID заказа Ludovex из ответа на создание заказа (формат ответа в документации не описан)
 function extractLudovexOrderId(data: any): string | null {
   const candidates = [
@@ -438,7 +452,15 @@ export async function POST(request: Request) {
       console.error('Ошибка сохранения ID заказа Ludovex:', saveEx);
     }
 
-    await completeOrder(createdOrder.id);
+    // Завершаем сразу ТОЛЬКО если Ludovex подтвердил выполнение.
+    // Если заказ у них "в обработке", оставляем processing: тогда вебхук сможет и завершить его
+    // (order.completed), и вернуть деньги (order.failed / order.refunded).
+    const ludovexStatus = extractLudovexStatus(data);
+    if (ludovexStatus && FINAL_LUDOVEX_STATUSES.includes(ludovexStatus)) {
+      await completeOrder(createdOrder.id);
+    } else {
+      console.log(`⏳ Заказ ${createdOrder.id} у Ludovex в обработке (статус: ${ludovexStatus ?? 'не указан'}), ждём вебхук`);
+    }
 
     // Конкурс: билет за первую покупку
     try {
