@@ -3,6 +3,7 @@ import WalletView from "./components/wallet";
 import HistoryView from "./components/history";
 import Banner from "./components/banner";
 
+
 import { useState, useEffect, ChangeEvent } from "react";
 
 // Типы Telegram SDK
@@ -593,6 +594,7 @@ const loadBalance = async () => {
       setTopUpError(`Tarmoq xatosi: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
+  
 
     // ===================== КОНКУРС =====================
   const [contest, setContest] = useState<any>(null);
@@ -732,6 +734,7 @@ const loadBalance = async () => {
       }
     };
   }, [isContestOpen]);
+  
 
   // Таймер обратного отсчёта на экране оплаты
   useEffect(() => {
@@ -828,8 +831,12 @@ const handleBuy = async () => {
 
   const telegramProfile = activeView === "profile" ? getTelegramProfile() : null;
 
-  return (
+return (
     <div style={styles.container}>
+      {/* 🚀 ЭКРАН ЗАГРУЗКИ (благодаря Portal он сам встанет поверх всего) */}
+            {/* <SplashScreen /> */}
+
+      {/* Основные глобальные стили и шрифты приложения */}
       <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
@@ -884,25 +891,6 @@ const handleBuy = async () => {
         .bt-search-input:focus { box-shadow: 0 0 0 3px rgba(184,139,255,.28); }
         .bt-sheet { animation: bt-sheetUp .32s cubic-bezier(0, 0, 0.2, 1) forwards; }
         .bt-backdrop { animation: bt-fadeIn .2s ease forwards; }
-
-        @keyframes bt-ai-glow {
-          0%, 100% { box-shadow: 0 6px 20px rgba(185,139,255,.45); }
-          50% { box-shadow: 0 6px 28px rgba(185,139,255,.75); }
-        }
-        .bt-ai-fab { animation: bt-ai-glow 2.4s ease-in-out infinite; transition: transform .15s ease; }
-        .bt-ai-fab:active { transform: scale(0.94); }
-
-        .bt-ai-typing { display: inline-flex; gap: 4px; align-items: center; }
-        .bt-ai-typing span {
-          width: 6px; height: 6px; border-radius: 50%; background: #A79FC2;
-          animation: bt-ai-blink 1.2s infinite ease-in-out both;
-        }
-        .bt-ai-typing span:nth-child(2) { animation-delay: .15s; }
-        .bt-ai-typing span:nth-child(3) { animation-delay: .3s; }
-        @keyframes bt-ai-blink {
-          0%, 80%, 100% { opacity: .3; transform: scale(0.8); }
-          40% { opacity: 1; transform: scale(1); }
-        }
       ` }} />
 
       {/* ФОНОВЫЕ ПЯТНА */}
@@ -957,6 +945,7 @@ const handleBuy = async () => {
     <div style={{ ...styles.burgerLine, width: "16px" }}></div>
   </button>
 </header>
+
 
 
 {/* ===================== 1. ГЛАВНАЯ ===================== */}

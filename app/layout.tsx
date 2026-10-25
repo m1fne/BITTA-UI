@@ -1,5 +1,4 @@
 import Script from "next/script";
-import ClientProviders from "./components/ClientProviders"; // Путь к твоему файлу
 
 export const metadata = {
   title: "BittaHub",
@@ -14,12 +13,10 @@ export default function RootLayout({
   return (
     <html lang="uz">
       <head>
-        {/* Подключаем официальный скрипт Telegram WebApp ДО загрузки приложения */}
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
-        {/* Глобальное удаление синего квадрата при тапе и добавление микро-анимации кнопкам */}
         <style
           dangerouslySetInnerHTML={{
             __html: `
@@ -39,11 +36,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="bg-[#090d16] text-white antialiased">
-        <ClientProviders>
-          {children}
-        </ClientProviders>
-      </body>
+      <body className="bg-[#090d16] text-white antialiased">{children}</body>
     </html>
   );
 }

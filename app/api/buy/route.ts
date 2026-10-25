@@ -6,7 +6,7 @@ type LudovexParams = { game_key: string; variation_id: string };
 
 // Варианты товаров из каталога Ludovex (variation_id). Менять только если Ludovex обновит каталог.
 const PUBG = {
-  uc60: 'lvxa_s_O1fmdN0H9_Vb9f1PCxW7Ynot2lkxBm3KvuJhFDpSxwSwSwZwP3728RgVkXz3CEU-OItcuZXjx8-WFTa34Asgg',
+  uc60: 'lvxa_s_O1fmdN0H9_Vb9f1PCxW7Ynot2lkxBm3KvuJhFDpSxwSwZwP3728RgVkXz3CEU-OItcuZXjx8-WFTa34Asgg',
   uc325: 'lvxa_s_wPEwbMld6w4bRLbPY_jZHM2xRodrFWCGiEbjqtUftuCQMOthwNhN3sgfARVtq5G39qxk1dytklz3YQS73EOk',
   uc660: 'lvxa_s_7EHYSVj-yAhGpFIZMbuzVFfLZWGypJPz9owPCFbKqOuJCSejyM1mt5VzL-I1AWTY7IglhjiKPw16WO2vAtCR',
   uc1800: 'lvxa_s_SJNWDazLfKR-FwOK94LW0tjvj_KRLGc1nzb6kt7XfcVloGeHpeVHdG2emwDWkELtx2HGXrnBysaPKes0gWKtHg',
@@ -99,7 +99,7 @@ function getLudovexParams(
     else if (product.includes('weekly deal') && product.includes('2')) variation_id = PUBG.weeklyDeal2;
     else if (product.includes('mythic emblem') && product.includes('weekly')) variation_id = PUBG.weeklyMythic;
     else if (product.includes('mythic emblem')) variation_id = PUBG.mythic;
-    else if (product.includes('firearm')) variation_id = PUBG.firearm;
+    else if (product.includes('firearm')) variation_id = null; // нет в каталоге Ludovex
 
     return variation_id ? { game_key: 'lvxa_g_jz9MVhttb20qfWvQt224GZF1B2-E2M4AqIHzJ7qCk2c', variation_id } : null;
   }
