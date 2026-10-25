@@ -41,6 +41,29 @@ function verifySignature(
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+
+// Находим НАШ заказ. Ludovex в вебхуке присылает свой order_id (без нашего ключа),
+// поэтому при покупке мы сохраняем его в orders.provider_order_id.
+async function findOurOrderId(data: any): Promise<number | null> {
+  // 1) если Ludovex когда-нибудь пришлёт наш ключ идемпотентности
+  const key = data.idempotency_key || data.merchant_order_id;
+  const m = typeof key === 'string' ? key.match(/^order-(\d+)$/) : null;
+  if (m) return Number(m[1]);
+
+  // 2) по ID заказа Ludovex, сохранённому при покупке
+  const providerId = data.order_id ?? data.id;
+  if (providerId === undefined || providerId === null || !/^\d+$/.test(String(providerId))) return null;
+
+  const { data: row, error } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('provider_order_id', String(providerId))
+    .maybeSingle();
+
+  if (error) throw error;
+  return row?.id ?? null;
+}
+
 export async function POST(request: Request) {
   let claimedDeliveryId: string | null = null;
 
@@ -75,7 +98,12 @@ export async function POST(request: Request) {
     // 2. ПОДПИСЬ ОБЯЗАТЕЛЬНА для всех боевых событий.
     // Если секрета нет или подпись не совпала, событие отклоняется (раньше проверка пропускалась).
     if (!verifySignature(secret, ts, rawText, sig)) {
-      console.warn('⚠️ Неверная или отсутствующая подпись вебхука');
+      console.warn('⚠️ Неверная или отсутствующая подпись вебхука', {
+        secretSet: !!secret,
+        secretLength: secret.length,
+        tsPresent: !!ts,
+        sigPrefix: sig ? sig.slice(0, 14) : null,
+      });
       return new NextResponse(null, { status: 401 });
     }
 
@@ -107,20 +135,18 @@ export async function POST(request: Request) {
     }
 
     if (eventObj.event === 'order.completed' || eventObj.event === 'order.failed' || eventObj.event === 'order.refunded') {
-      // Наш заказ определяем ТОЛЬКО по нашему ключу идемпотентности "order-<id>".
-      // ID заказа самого Ludovex с нашим не путаем.
-      const key = data.idempotency_key || data.merchant_order_id;
-      const match = typeof key === 'string' ? key.match(/^order-(\d+)$/) : null;
-      const orderId = match ? Number(match[1]) : null;
+      const orderId = await findOurOrderId(data);
 
       if (!orderId || !Number.isSafeInteger(orderId) || orderId <= 0) {
-        console.error('Вебхук без нашего order-ключа:', rawText.slice(0, 1000));
+        // Возможно, вебхук пришёл раньше, чем мы успели сохранить ID заказа Ludovex.
+        // Бросаем ошибку: отметка доставки снимется, Ludovex повторит отправку чуть позже.
+        console.error('Наш заказ для вебхука не найден (пока):', rawText.slice(0, 800));
         if (eventObj.event !== 'order.completed') {
           await notifyAdmin(
-            `⚠️ Вебхук ${eventObj.event} без нашего ключа заказа. Проверьте вручную.\n${rawText.slice(0, 600)}`
+            `⚠️ Вебхук ${eventObj.event}: наш заказ не найден (Ludovex order_id: ${data.order_id ?? data.id ?? '?'}). Проверьте вручную.`
           );
         }
-        return new NextResponse(null, { status: 204 });
+        throw new Error('our order not found for webhook');
       }
 
       if (eventObj.event === 'order.completed') {

@@ -267,6 +267,25 @@ async function callLudovex(payload: Record<string, any>, idempotencyKey: string)
   }
 }
 
+
+// Достаём ID заказа Ludovex из ответа на создание заказа (формат ответа в документации не описан)
+function extractLudovexOrderId(data: any): string | null {
+  const candidates = [
+    data?.order_id,
+    data?.data?.order_id,
+    data?.order?.order_id,
+    data?.result?.order_id,
+    data?.id,
+    data?.data?.id,
+    data?.order?.id,
+    data?.result?.id,
+  ];
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && /^\d+$/.test(String(c))) return String(c);
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
   let createdOrder: any = null;
 
@@ -402,6 +421,23 @@ export async function POST(request: Request) {
     }
 
     // 8. УСПЕХ
+    // Запоминаем ID заказа Ludovex: по нему вебхук находит наш заказ
+    try {
+      console.log('✅ Ответ Ludovex:', JSON.stringify(data).slice(0, 600));
+      const ludovexOrderId = extractLudovexOrderId(data);
+      if (ludovexOrderId) {
+        const { error: saveErr } = await supabase
+          .from('orders')
+          .update({ provider_order_id: ludovexOrderId })
+          .eq('id', createdOrder.id);
+        if (saveErr) console.error('Не удалось сохранить ID заказа Ludovex:', saveErr);
+      } else {
+        console.warn('В ответе Ludovex не нашли ID заказа, заказ', createdOrder.id);
+      }
+    } catch (saveEx) {
+      console.error('Ошибка сохранения ID заказа Ludovex:', saveEx);
+    }
+
     await completeOrder(createdOrder.id);
 
     // Конкурс: билет за первую покупку
