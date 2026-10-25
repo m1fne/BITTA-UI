@@ -1,4 +1,5 @@
 import Script from "next/script";
+import ClientProviders from "./components/ClientProviders"; // Путь к твоему файлу
 
 export const metadata = {
   title: "BittaHub",
@@ -38,7 +39,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body className="bg-[#090d16] text-white antialiased">
+        <ClientProviders>
+          {children}
+        </ClientProviders>
+      </body>
     </html>
   );
 }
