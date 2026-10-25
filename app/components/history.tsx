@@ -33,6 +33,20 @@ const formatDate = (dateString: string) => {
   });
 };
 
+// 🔹 Функция для выбора логотипа игры по названию
+const getGameLogo = (title: string, type: string) => {
+  if (type === "deposit") return null; // Для пополнения используем эмодзи/иконку кошелька
+  
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.includes("pubg")) return "/pubg_mobile.jpg";
+  if (lowerTitle.includes("bloodstrike") || lowerTitle.includes("blood strike")) return "/bloodstrike.jpg";
+  if (lowerTitle.includes("freefire") || lowerTitle.includes("free fire") || lowerTitle.includes("ff")) return "/ff_diamonds.jpg";
+  if (lowerTitle.includes("mobile legends") || lowerTitle.includes("mlbb")) return "/mobile_legends.jpg";
+  if (lowerTitle.includes("telegram") || lowerTitle.includes("premium")) return "/telegram_premium.jpg";
+  
+  return null; // Дефолт (если игра не распозналась)
+};
+
 export default function HistoryView({ telegramId }: HistoryViewProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +60,11 @@ export default function HistoryView({ telegramId }: HistoryViewProps) {
     async function fetchHistory() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/history?telegramId=${telegramId}`);
+        // Безопасный запрос с передачей initData в заголовках
+        const initData = window.Telegram?.WebApp?.initData ?? "";
+        const res = await fetch(`/api/history?telegramId=${telegramId}`, {
+          headers: { "x-telegram-init-data": initData },
+        });
         const data = await res.json();
         if (data.success && data.history) {
           setTransactions(data.history);
@@ -100,6 +118,7 @@ export default function HistoryView({ telegramId }: HistoryViewProps) {
           {transactions.map((tx) => {
             const badge = getStatusBadge(tx.status);
             const isDeposit = tx.type === "deposit";
+            const logoUrl = getGameLogo(tx.title, tx.type);
 
             return (
               <div
@@ -115,7 +134,7 @@ export default function HistoryView({ telegramId }: HistoryViewProps) {
                   gap: "12px"
                 }}
               >
-                {/* Иконка типа */}
+                {/* Иконка или логотип игры */}
                 <div style={{
                   width: "40px",
                   height: "40px",
@@ -125,9 +144,18 @@ export default function HistoryView({ telegramId }: HistoryViewProps) {
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: "18px",
-                  flexShrink: 0
+                  flexShrink: 0,
+                  overflow: "hidden"
                 }}>
-                  {isDeposit ? "💳" : "🎮"}
+                  {logoUrl ? (
+                    <img 
+                      src={logoUrl} 
+                      alt={tx.title} 
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                    />
+                  ) : (
+                    isDeposit ? "💳" : "🎮"
+                  )}
                 </div>
 
                 {/* Описание и дата */}
@@ -143,7 +171,7 @@ export default function HistoryView({ telegramId }: HistoryViewProps) {
                     {tx.title}
                   </div>
                   <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.4)", marginTop: "2px" }}>
-                    {tx.target_id ? `ID: ${tx.target_id} • ` : ''}
+                    {tx.target_id ? `ID: ${tx.target_id} • ` : ""}
                     {formatDate(tx.created_at)}
                   </div>
                 </div>
