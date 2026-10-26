@@ -42,13 +42,45 @@ function verifySignature(
 }
 
 
+// Убираем случайные пробелы, переносы строк и кавычки вокруг секрета из переменной окружения
+function normalizeSecret(value: string): string {
+  return value.trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+// ДИАГНОСТИКА (только при неудачной проверке): проверяем, не подписывает ли Ludovex иначе, чем в документации.
+// В лог попадают только НАЗВАНИЯ подошедших вариантов, сам секрет и подписи не выводятся.
+function diagnoseSignature(secret: string, ts: string, rawText: string, sigHeader: string): string[] {
+  const received = sigHeader.replace(/^sha256=/, '');
+  const keys: Record<string, crypto.BinaryLike> = { plain: secret };
+  if (secret.includes('_')) keys.withoutPrefix = secret.slice(secret.lastIndexOf('_') + 1);
+  if (/^[0-9a-fA-F]+$/.test(secret) && secret.length % 2 === 0) keys.hexBytes = Buffer.from(secret, 'hex');
+  keys.base64Bytes = Buffer.from(secret, 'base64');
+
+  const payloads: Record<string, string> = {
+    'ts.body': `${ts}.${rawText}`,
+    'body-only': rawText,
+    'ts+body': `${ts}${rawText}`,
+  };
+
+  const found: string[] = [];
+  for (const [keyName, key] of Object.entries(keys)) {
+    for (const [payloadName, payload] of Object.entries(payloads)) {
+      const hex = crypto.createHmac('sha256', key).update(payload).digest('hex');
+      const a = Buffer.from(hex);
+      const b = Buffer.from(received);
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) found.push(`${keyName} | ${payloadName}`);
+    }
+  }
+  return found;
+}
+
 // Находим НАШ заказ. Ludovex в вебхуке присылает свой order_id (без нашего ключа),
 // поэтому при покупке мы сохраняем его в orders.provider_order_id.
-async function findOurOrderId(data: any): Promise<number | null> {
-  // 1) если Ludovex когда-нибудь пришлёт наш ключ идемпотентности
+async function findOurOrderId(data: any): Promise<string | null> {
+  // 1) если Ludovex когда-нибудь пришлёт наш ключ идемпотентности ("order-<uuid>")
   const key = data.idempotency_key || data.merchant_order_id;
-  const m = typeof key === 'string' ? key.match(/^order-(\d+)$/) : null;
-  if (m) return Number(m[1]);
+  const m = typeof key === 'string' ? key.match(/^order-([0-9a-fA-F-]{36})$/) : null;
+  if (m) return m[1];
 
   // 2) по ID заказа Ludovex, сохранённому при покупке
   const providerId = data.order_id ?? data.id;
@@ -61,14 +93,14 @@ async function findOurOrderId(data: any): Promise<number | null> {
     .maybeSingle();
 
   if (error) throw error;
-  return row?.id ?? null;
+  return row?.id ? String(row.id) : null;
 }
 
 export async function POST(request: Request) {
   let claimedDeliveryId: string | null = null;
 
   try {
-    const secret = process.env.LUDOVEX_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
+    const secret = normalizeSecret(process.env.LUDOVEX_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '');
 
     const ts = request.headers.get('X-Ludovex-Timestamp');
     const sig = request.headers.get('X-Ludovex-Signature');
@@ -103,6 +135,7 @@ export async function POST(request: Request) {
         secretLength: secret.length,
         tsPresent: !!ts,
         sigPrefix: sig ? sig.slice(0, 14) : null,
+        matchedVariants: secret && ts && sig ? diagnoseSignature(secret, ts, rawText, sig) : [],
       });
       return new NextResponse(null, { status: 401 });
     }
@@ -137,7 +170,7 @@ export async function POST(request: Request) {
     if (eventObj.event === 'order.completed' || eventObj.event === 'order.failed' || eventObj.event === 'order.refunded') {
       const orderId = await findOurOrderId(data);
 
-      if (!orderId || !Number.isSafeInteger(orderId) || orderId <= 0) {
+      if (!orderId) {
         // Возможно, вебхук пришёл раньше, чем мы успели сохранить ID заказа Ludovex.
         // Бросаем ошибку: отметка доставки снимется, Ludovex повторит отправку чуть позже.
         console.error('Наш заказ для вебхука не найден (пока):', rawText.slice(0, 800));
