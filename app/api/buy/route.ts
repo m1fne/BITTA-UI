@@ -300,6 +300,19 @@ function extractLudovexOrderId(data: any): string | null {
   return null;
 }
 
+
+// Реферальный купон: скидка на следующую покупку за каждого друга, купившего любой пак
+const COUPON_PERCENT = 2;
+
+async function releaseCoupon(couponId: number | null) {
+  if (!couponId) return;
+  try {
+    await supabase.rpc('release_referral_coupon', { p_coupon_id: couponId });
+  } catch (e) {
+    console.error('Не удалось вернуть купон:', couponId, e);
+  }
+}
+
 export async function POST(request: Request) {
   let createdOrder: any = null;
 
@@ -353,10 +366,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Bunday mahsulot topilmadi yoki narxi noto'g'ri" }, { status: 400 });
     }
 
+    // 3.1. КУПОН ЗА ДРУГА: если у пользователя есть неиспользованный купон, берём его (атомарно)
+    // и считаем скидку НА СЕРВЕРЕ. Если что-то пошло не так, покупаем без скидки.
+    let couponId: number | null = null;
+    let chargePrice = price;
+    try {
+      const { data: reservedCoupon, error: couponErr } = await supabase.rpc('reserve_referral_coupon', {
+        p_user_id: telegramId,
+      });
+      if (couponErr) {
+        console.error('Купон: ошибка резервирования:', couponErr.message);
+      } else if (reservedCoupon) {
+        couponId = Number(reservedCoupon);
+        chargePrice = Math.round((price * (100 - COUPON_PERCENT)) / 100);
+      }
+    } catch (couponEx) {
+      console.error('Купон: исключение:', couponEx);
+    }
+
     // 4. АТОМАРНОЕ СПИСАНИЕ И СОЗДАНИЕ ЗАКАЗА В SUPABASE
     try {
-      createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, price);
+      createdOrder = await purchaseWithBalance(telegramId, service, productName, playerId, chargePrice);
     } catch (dbErr: any) {
+      await releaseCoupon(couponId); // покупка не состоялась: купон возвращаем
       const msg = dbErr?.message || '';
       if (
         msg.includes('INSUFFICIENT') ||
@@ -367,6 +399,15 @@ export async function POST(request: Request) {
       }
       console.error('Ошибка списания:', msg);
       return NextResponse.json({ error: 'Xatolik yuz berdi. Qayta urinib ko‘ring.' }, { status: 400 });
+    }
+
+    // Привязываем купон к заказу (если заказ потом вернут, купон вернётся автоматически)
+    if (couponId) {
+      try {
+        await supabase.rpc('attach_referral_coupon', { p_coupon_id: couponId, p_order_id: createdOrder.id });
+      } catch (attachErr) {
+        console.error('Купон: не удалось привязать к заказу:', attachErr);
+      }
     }
 
     // 5. АВТО-ПАРСИНГ ZONE_ID ИЗ PLAYER_ID (если игрок ввёл всё в одно поле)

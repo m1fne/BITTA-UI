@@ -386,7 +386,31 @@ export default function Home() {
   const handleOpenFaq = () => setIsFaqOpen(true);
   const handleOpenTerms = () => setIsTermsOpen(true);
 
-
+  const [referral, setReferral] = useState<{ invited: number; earned: number; available: number; percent: number } | null>(null);
+ 
+const loadReferral = async () => {
+  try {
+    const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
+    const res = await fetch("/api/referral/state", {
+      headers: { "x-telegram-init-data": initData },
+    });
+    const data: any = await res.json();
+    if (res.ok && data.success) {
+      setReferral({
+        invited: data.invited,
+        earned: data.earned,
+        available: data.available,
+        percent: data.percent,
+      });
+    }
+  } catch {
+    // ничего не делаем
+  }
+};
+ 
+useEffect(() => {
+  if (activeView === "profile" || isShopOpen) loadReferral();
+}, [activeView, isShopOpen]);
 
 // 1. Подключение скрипта Telegram (Твой существующий)
   useEffect(() => {
@@ -403,6 +427,8 @@ export default function Home() {
     document.body.appendChild(script);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  loadReferral();
 
   // 2. [ДОБАВЛЕНО] Авто-закрытие магазина при переключении нижних табов
   useEffect(() => {
@@ -663,9 +689,19 @@ const loadBalance = async () => {
   useEffect(() => {
     loadContest();
 
-    // Ссылка вида t.me/bitta_hub_bot?startapp=contest сразу открывает экран конкурса
+     // Ссылка вида t.me/bitta_hub_bot?startapp=contest сразу открывает экран конкурса
     try {
       const sp = new URLSearchParams(getInitData()).get("start_param") || "";
+
+      // Записываем приглашение (кто пригласил этого пользователя)
+      if (sp.startsWith("ref_")) {
+        fetch("/api/referral/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: getInitData() || (window.Telegram?.WebApp?.initData ?? "") }),
+        }).catch(() => {});
+      }
+
       if (sp.startsWith("contest") || sp.startsWith("ref_")) {
         setIsContestOpen(true);
       }
@@ -706,6 +742,16 @@ const loadBalance = async () => {
       `https://t.me/share/url?url=${encodeURIComponent(contest.invite_link)}&text=${encodeURIComponent(text)}`
     );
   };
+
+  const handleReferralInvite = () => {
+  if (!u?.id) return;
+  haptic("light");
+  const link = `https://t.me/bitta_hub_bot?startapp=ref_${u.id}`;
+  const text = "Bitta: o'yin valyutalari qulay narxda! Mening havolam orqali kiring:";
+  openTelegramLink(
+    `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
+  );
+};
 
     // Кнопка/жест «назад» закрывает только экран конкурса, а не всё приложение
   useEffect(() => {
@@ -1362,6 +1408,42 @@ return (
               </button>
             </div>
 
+            <div style={{ ...styles.menuBalanceCard, marginTop: "12px" }}>
+  <div style={{ fontSize: "15px", fontWeight: 700, color: "#FFFFFF" }}>🎁 Do'stlarni taklif qiling</div>
+  <div style={{ fontSize: "12px", color: "#A79FC2", margin: "6px 0 12px 0", lineHeight: 1.5 }}>
+    Do'stingiz biror paket sotib olsa, har biri uchun keyingi xaridingizga −2% kupon olasiz.
+  </div>
+  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+    {[
+      { label: "Taklif qilingan", value: referral?.invited ?? 0 },
+      { label: "Xarid qilgan", value: referral?.earned ?? 0 },
+      { label: "Kuponlar", value: referral?.available ?? 0 },
+    ].map((item) => (
+      <div
+        key={item.label}
+        style={{
+          flex: 1,
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: "12px",
+          padding: "8px 4px",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontSize: "18px", fontWeight: 700, color: "#FFFFFF" }}>{item.value}</div>
+        <div style={{ fontSize: "10px", color: "#A79FC2", marginTop: "2px" }}>{item.label}</div>
+      </div>
+    ))}
+  </div>
+  <button
+    style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }}
+    className="bt-primary-btn"
+    onClick={handleReferralInvite}
+  >
+    Do'stlarni taklif qilish
+  </button>
+</div>
+
             <div style={styles.profileSectionLabel}>Til</div>
             <div style={styles.langRow}>
               <button style={{ ...styles.langPill, ...(uiLanguage === "uz" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("uz")}>O'zbekcha</button>
@@ -1850,8 +1932,16 @@ return (
             <div style={{ fontSize: '15px', color: '#a855f7', fontWeight: '700', marginTop: '4px' }}>
               {selectedPack.price}
             </div>
-          </div>
 
+            {/* ↓↓↓ ВСТАВКА КУПОНА ↓↓↓ */}
+            {referral && referral.available > 0 && (
+              <div style={{ fontSize: '12px', color: '#3DDC97', marginTop: '6px' }}>
+                🎟 Kupon −{referral.percent}% avtomatik qo'llanadi
+              </div>
+            )}
+            {/* ↑↑↑ КОНЕЦ ВСТАВКИ ↑↑↑ */}
+          </div>
+          
         {/* Ввод ID */}
         {activeShopType === 'mlbb' ? (
           /* Поля для Mobile Legends (Два инпута) */
