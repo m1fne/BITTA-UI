@@ -386,27 +386,7 @@ export default function Home() {
   const handleOpenFaq = () => setIsFaqOpen(true);
   const handleOpenTerms = () => setIsTermsOpen(true);
 
-  const [referral, setReferral] = useState<{ invited: number; earned: number; available: number; percent: number } | null>(null);
- 
-const loadReferral = async () => {
-  try {
-    const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
-    const res = await fetch("/api/referral/state", {
-      headers: { "x-telegram-init-data": initData },
-    });
-    const data: any = await res.json();
-    if (res.ok && data.success) {
-      setReferral({
-        invited: data.invited,
-        earned: data.earned,
-        available: data.available,
-        percent: data.percent,
-      });
-    }
-  } catch {
-    // ничего не делаем
-  }
-};
+
  
 useEffect(() => {
   if (activeView === "profile" || isShopOpen) loadReferral();
@@ -428,7 +408,7 @@ useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  loadReferral();
+ 
 
   // 2. [ДОБАВЛЕНО] Авто-закрытие магазина при переключении нижних табов
   useEffect(() => {
@@ -622,78 +602,35 @@ const loadBalance = async () => {
   };
   
 
-    // ===================== КОНКУРС =====================
-  const [contest, setContest] = useState<any>(null);
-  const [isContestOpen, setIsContestOpen] = useState(false);
-  const [contestChecking, setContestChecking] = useState(false);
-  const [contestMsg, setContestMsg] = useState("");
+// ===================== РЕФЕРАЛЬНАЯ СИСТЕМА =====================
+  const [referral, setReferral] = useState<{ invited: number; earned: number; available: number; percent: number } | null>(null);
 
-  // Текст правил (можно менять прямо здесь)
-  const CONTEST_RULES: string[] = [
-    "Qatnashish bepul: kanalga a'zo bo'lish va do'stlarni taklif qilish orqali chipta olinadi. Xarid qilish qo'shimcha chipta beradi.",
-    "Chiptalar: kanalga a'zo bo'lish — 1 chipta; do'stni taklif qilish — 1 chipta (maksimum 6 ta do'st; do'st ilovaga yangi kirgan va kanalga a'zo bo'lgan bo'lishi kerak); ilovadan istalgan paketni xarid qilish — 1 chipta.",
-    "Har bir chiptaning o'z tartib raqami bor (1, 2, 3 ...). G'oliblar tasodifiy raqamlar generatori (randomayzer) orqali tanlanadi.",
-    "Sovrinlar: 1-o'rin — 1000 UC, 2-o'rin — 325 UC, keyingi 8 ta g'olibga 60 UC dan.",
-    "Konkurs yakunida tashkilotchi barcha g'oliblarning akkauntlarini tekshiradi: soxta (bot) akkauntlar haqiqiy foydalanuvchilardan ajratiladi, kanalga a'zolik qayta tekshiriladi va kerak bo'lsa skrinshot so'raladi.",
-    "Qoidalarni buzgan, kanaldan chiqib ketgan yoki soxta akkauntlar diskvalifikatsiya qilinadi, g'olib qayta tanlanadi.",
-    "Bitta odam faqat bitta sovrin yutadi.",
-    "Konkurs noyabr oyida yakunlanadi. Aniq sana kanalda e'lon qilinadi.",
-  ];
-
-  // Общие стили экрана конкурса
-  const contestCardStyle = {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "16px",
-    padding: "14px",
-    marginTop: "12px",
-  } as const;
-
-  const contestBtnStyle = {
-    background: "linear-gradient(135deg, #a855f7, #6366f1)",
-    border: "none",
-    color: "#FFF",
-    fontSize: "13px",
-    fontWeight: 700,
-    padding: "9px 14px",
-    borderRadius: "12px",
-    cursor: "pointer",
-  } as const;
-
-  const contestBtnGhostStyle = {
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.15)",
-    color: "#FFF",
-    fontSize: "13px",
-    fontWeight: 700,
-    padding: "9px 14px",
-    borderRadius: "12px",
-    cursor: "pointer",
-  } as const;
-
-  // Загрузка состояния конкурса (заодно регистрирует приглашённого друга при первом входе по ссылке)
-  const loadContest = async () => {
+  const loadReferral = async () => {
     try {
-      const res = await fetch("/api/contest/state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData: getInitData() }),
+      const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
+      const res = await fetch("/api/referral/state", {
+        headers: { "x-telegram-init-data": initData },
       });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data && data.contest) setContest(data);
+      const data: any = await res.json();
+      if (res.ok && data.success) {
+        setReferral({
+          invited: data.invited,
+          earned: data.earned,
+          available: data.available,
+          percent: data.percent,
+        });
+      }
     } catch {
-      // без конкурса приложение продолжает работать
+      // ничего не делаем
     }
   };
 
   useEffect(() => {
-    loadContest();
+    loadReferral();
 
-     // Ссылка вида t.me/bitta_hub_bot?startapp=contest сразу открывает экран конкурса
     try {
       const sp = new URLSearchParams(getInitData()).get("start_param") || "";
-
-      // Записываем приглашение (кто пригласил этого пользователя)
+      // Регистрация реферала при первом входе по ссылке
       if (sp.startsWith("ref_")) {
         fetch("/api/referral/register", {
           method: "POST",
@@ -701,85 +638,26 @@ const loadBalance = async () => {
           body: JSON.stringify({ initData: getInitData() || (window.Telegram?.WebApp?.initData ?? "") }),
         }).catch(() => {});
       }
-
-      if (sp.startsWith("contest") || sp.startsWith("ref_")) {
-        setIsContestOpen(true);
-      }
     } catch {
       // ничего не делаем
     }
   }, []);
 
-  // Кнопка «Tekshirish»
-  const handleContestCheck = async () => {
-    if (contestChecking) return;
-    haptic("light");
-    setContestChecking(true);
-    setContestMsg("");
-    try {
-      const res = await fetch("/api/contest/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData: getInitData() }),
-      });
-      const data = await res.json().catch(() => null);
-      if (data && data.contest) setContest(data);
-      setContestMsg(data?.message || (res.ok ? "" : "Xatolik yuz berdi"));
-      if (data && data.granted > 0) haptic("success");
-    } catch {
-      setContestMsg("Tarmoq xatosi");
-    } finally {
-      setContestChecking(false);
-    }
-  };
+  // Автообновление данных рефералки при открытии профиля или магазина
+  useEffect(() => {
+    if (activeView === "profile" || isShopOpen) loadReferral();
+  }, [activeView, isShopOpen]);
 
-  // Кнопка «Dostlarni taklif qilish»
-  const handleContestInvite = () => {
-    if (!contest?.invite_link) return;
+  // Кнопка шеринга реферальной ссылки
+  const handleReferralInvite = () => {
+    if (!u?.id) return;
     haptic("light");
-    const text = "Bitta konkursida qatnashing va UC yutib oling!";
+    const link = `https://t.me/bitta_hub_bot?startapp=ref_${u.id}`;
+    const text = "Bitta: o'yin valyutalari qulay narxda! Mening havolam orqali kiring:";
     openTelegramLink(
-      `https://t.me/share/url?url=${encodeURIComponent(contest.invite_link)}&text=${encodeURIComponent(text)}`
+      `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
     );
   };
-
-  const handleReferralInvite = () => {
-  if (!u?.id) return;
-  haptic("light");
-  const link = `https://t.me/bitta_hub_bot?startapp=ref_${u.id}`;
-  const text = "Bitta: o'yin valyutalari qulay narxda! Mening havolam orqali kiring:";
-  openTelegramLink(
-    `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
-  );
-};
-
-    // Кнопка/жест «назад» закрывает только экран конкурса, а не всё приложение
-  useEffect(() => {
-    if (!isContestOpen) return;
-
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (!tg || !tg.BackButton) return;
-
-    const handleBack = () => {
-      setIsContestOpen(false);
-    };
-
-    try {
-      tg.BackButton.show();
-      tg.BackButton.onClick(handleBack);
-    } catch {
-      return;
-    }
-
-    return () => {
-      try {
-        tg.BackButton.offClick(handleBack);
-        tg.BackButton.hide();
-      } catch {
-        // ничего не делаем
-      }
-    };
-  }, [isContestOpen]);
   
 
   // Таймер обратного отсчёта на экране оплаты
@@ -1016,7 +894,7 @@ return (
       </div>
 
       {/* 🚀 НАШ БАННЕР ВСТАЕТ СЮДА */}
-      <Banner onContestClick={() => setIsContestOpen(true)} />
+      
 
       <h1 style={{ 
         fontFamily: "'Plus Jakarta Sans', sans-serif", 
@@ -1103,245 +981,7 @@ return (
       </div>
     </div>
 
-        {/* КОНКУРС: ЭКРАН */}
-    {isContestOpen && (
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: '65px',
-          background: '#0d0f17',
-          zIndex: 99,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        {/* ВЕРХНЯЯ ПАНЕЛЬ */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px',
-          position: 'sticky',
-          top: 0,
-          background: '#0d0f17',
-          zIndex: 10,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-        }}>
-          <button
-            onClick={() => {
-              haptic("light");
-              setIsContestOpen(false);
-            }}
-            style={{ background: 'none', border: 'none', color: '#FFF', fontSize: '16px', fontWeight: '600', cursor: 'pointer' }}
-          >
-            ‹ Orqaga
-          </button>
-          <span style={{ fontSize: '15px', fontWeight: '700', color: '#FFF' }}>Konkurs</span>
-          <button
-            style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex' }}
-            onClick={() => setIsContestOpen(false)}
-          >
-            <Icons.Close />
-          </button>
-        </div>
-
-        {/* КОНТЕНТ */}
-        <div style={{ padding: '16px', flex: 1 }}>
-          {!contest || !contest.contest ? (
-            <div style={{ color: '#9aa0b4', fontSize: '13px', textAlign: 'center', padding: '32px 0' }}>
-              Yuklanmoqda...
-            </div>
-          ) : (
-            <div>
-              {!contest.contest.is_active && (
-                <div style={{ background: 'rgba(255,157,175,0.12)', border: '1px solid rgba(255,157,175,0.35)', color: '#FF9DAF', borderRadius: '12px', padding: '10px 12px', fontSize: '13px', marginBottom: '12px' }}>
-                  Konkurs yakunlangan. Yangi chiptalar berilmaydi.
-                </div>
-              )}
-
-              {/* СОВРИНЫ */}
-              <div style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.22), rgba(99,102,241,0.18))', border: '1px solid rgba(184,139,255,0.35)', borderRadius: '16px', padding: '16px' }}>
-                <div style={{ fontSize: '13px', color: '#D1B3FF', fontWeight: 600, marginBottom: '8px' }}>Sovrinlar</div>
-                <div style={{ color: '#FFF', fontSize: '14px', lineHeight: 1.9 }}>
-                  🥇 1-o'rin — <b>1000 UC</b><br />
-                  🥈 2-o'rin — <b>325 UC</b><br />
-                  🎁 Yana 8 ta g'olibga — <b>60 UC</b> dan
-                </div>
-              </div>
-
-              {/* МОИ БИЛЕТЫ */}
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ fontSize: '13px', color: '#A79FC2', marginBottom: '8px' }}>
-                  Sizning chiptalaringiz: <b style={{ color: '#FFF' }}>{contest.tickets.length}</b>
-                </div>
-                {contest.tickets.length > 0 ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {contest.tickets.map((t: any) => (
-                      <span
-                        key={t.ticket_no}
-                        style={{ background: 'rgba(168,85,247,0.18)', border: '1px solid rgba(184,139,255,0.35)', color: '#E6D6FF', fontSize: '13px', fontWeight: 700, padding: '4px 10px', borderRadius: '10px' }}
-                      >
-                        #{t.ticket_no}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '12px', color: '#7E7694' }}>
-                    Hali chiptangiz yo'q — quyidagi topshiriqlarni bajaring.
-                  </div>
-                )}
-              </div>
-
-              {/* ЗАДАНИЕ 1: КАНАЛ */}
-              <div style={contestCardStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                  <div>
-                    <div style={{ color: '#FFF', fontSize: '15px', fontWeight: 700 }}>Kanalga a'zo bo'lish</div>
-                    <div style={{ color: '#9aa0b4', fontSize: '12px', marginTop: '2px' }}>@bitta_hub · +1 chipta</div>
-                  </div>
-                  {contest.channel_done && (
-                    <div style={{ color: '#3DDC97', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Icons.Check /> +1
-                    </div>
-                  )}
-                </div>
-                {!contest.channel_done && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                    <button
-                      style={contestBtnStyle}
-                      onClick={() => {
-                        haptic("light");
-                        openTelegramLink(contest.channel_url);
-                      }}
-                    >
-                      Kanalga a'zo bo'lish
-                    </button>
-                    <button style={contestBtnGhostStyle} onClick={handleContestCheck} disabled={contestChecking}>
-                      {contestChecking ? "..." : "Tekshirish"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* ЗАДАНИЕ 2: ДРУЗЬЯ */}
-              <div style={contestCardStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                  <div style={{ color: '#FFF', fontSize: '15px', fontWeight: 700 }}>Dostlarni taklif qilish</div>
-                  {contest.friends.counted >= contest.friends.max && (
-                    <div style={{ color: '#3DDC97', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Icons.Check /> Maksimum
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '4px', margin: '8px 0' }}>
-                  {Array.from({ length: contest.friends.max }).map((_, i) => (
-                    <div
-                      key={i}
-                      style={{ flex: 1, height: '6px', borderRadius: '3px', background: i < contest.friends.counted ? '#a855f7' : 'rgba(255,255,255,0.12)' }}
-                    />
-                  ))}
-                </div>
-                <div style={{ color: '#9aa0b4', fontSize: '12px', lineHeight: 1.5 }}>
-                  {contest.friends.counted}/{contest.friends.max} do'st · har biri +1 chipta. Do'st ilovaga yangi kirib, kanalga a'zo bo'lsa hisoblanadi.
-                </div>
-                <div style={{ color: '#7E7694', fontSize: '11px', marginTop: '4px' }}>
-                  Taklif qilinganlar: {contest.friends.invited}
-                </div>
-                {contest.friends.counted < contest.friends.max && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                    <button style={contestBtnStyle} onClick={handleContestInvite}>
-                      Dostlarni taklif qilish
-                    </button>
-                    <button style={contestBtnGhostStyle} onClick={handleContestCheck} disabled={contestChecking}>
-                      {contestChecking ? "..." : "Tekshirish"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* ЗАДАНИЕ 3: ПОКУПКА */}
-              <div style={contestCardStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                  <div>
-                    <div style={{ color: '#FFF', fontSize: '15px', fontWeight: 700 }}>Valyuta sotib olish</div>
-                    <div style={{ color: '#9aa0b4', fontSize: '12px', marginTop: '2px' }}>
-                      Har bir xarid uchun +1 chipta (cheklovsiz)
-                    </div>
-                  </div>
-                  {contest.purchase_count > 0 && (
-                    <div style={{ color: '#3DDC97', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Icons.Check /> +{contest.purchase_count}
-                    </div>
-                  )}
-                </div>
-                <div style={{ marginTop: '10px' }}>
-                  <button
-                    style={contestBtnStyle}
-                    onClick={() => {
-                      haptic("light");
-                      setIsContestOpen(false);
-                    }}
-                  >
-                    Valyuta sotib olish
-                  </button>
-                </div>
-              </div>
-
-              {contestMsg && (
-                <div style={{ marginTop: '12px', color: '#FFD166', fontSize: '13px' }}>{contestMsg}</div>
-              )}
-
-              {/* ПРАВИЛА */}
-              <div style={{ ...contestCardStyle, marginTop: '16px' }}>
-                <div style={{ color: '#FFF', fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>📋 Konkurs qoidalari</div>
-                {CONTEST_RULES.map((rule, i) => (
-                  <div key={i} style={{ color: '#B9B3CF', fontSize: '12px', lineHeight: 1.55, marginBottom: '6px' }}>
-                    {i + 1}. {rule}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    )}
-
-        {/* КОНКУРС: КАРТОЧКА */}
-    <section style={{ marginBottom: "16px", padding: "0 16px" }}>
-      <div
-        className="bt-tile"
-        onClick={() => {
-          haptic("light");
-          setIsContestOpen(true);
-          loadContest();
-        }}
-        style={{
-          background: "linear-gradient(135deg, rgba(168,85,247,0.22), rgba(99,102,241,0.18))",
-          border: "1px solid rgba(184,139,255,0.35)",
-          borderRadius: "16px",
-          padding: "16px",
-          cursor: "pointer"
-        }}
-      >
-        <div style={{ fontSize: "12px", color: "#D1B3FF", fontWeight: "600", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-          <Icons.Sparkle /> Konkurs
-        </div>
-        <div style={{ fontSize: "16px", fontWeight: "800", color: "#FFF", marginBottom: "4px" }}>
-          UC yutib oling! 🎁
-        </div>
-        <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)", marginBottom: "10px" }}>
-          1-o'rin — 1000 UC · 2-o'rin — 325 UC · yana 8 ta g'olibga 60 UC dan
-        </div>
-        <span style={{ fontSize: "13px", color: "#B88BFF", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
-          Qatnashish{contest && contest.tickets ? ` · Chiptalaringiz: ${contest.tickets.length}` : ""} <Icons.ChevronRight />
-        </span>
-      </div>
-    </section>
-    {/* РЕКЛАМА */}
+{/* РЕКЛАМА */}
     <section style={{ marginBottom: "20px", padding: "0 16px" }}>
       <div 
         className="bt-tile" 
@@ -1366,6 +1006,7 @@ return (
         <span style={{ fontSize: "13px", color: "#0088cc", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
           Murojaat qilish (@bitta_mngr) <Icons.ChevronRight />
         </span>
+
       </div>
     </section>
   </>
