@@ -487,6 +487,21 @@ const loadBalance = async () => {
       console.error("Ошибка сети баланса:", err);
     }
   };
+
+  useEffect(() => {
+  try {
+    const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
+    if (!initData) return;
+    fetch("/api/user/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData }),
+    }).catch(() => {});
+  } catch {
+    // ничего не делаем
+  }
+}, []);
+
   // Пока заявка на пополнение "на рассмотрении" — спрашиваем сервер, не решил ли админ.
   useEffect(() => {
     if (topUpStatus !== "pending" || !depositId) return;
