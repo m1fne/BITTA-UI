@@ -108,6 +108,17 @@ const uz = {
   // PUBG вкладки
   tabUC: "UC",
   tabShop: "Do'kon",
+
+  // оплата звёздами
+  methodCard: "Karta",
+  methodStars: "Telegram Stars",
+  starsInfo: "Telegram ichida yulduzlar bilan to'lang — balans bir zumda to'ldiriladi.",
+  starsPay: "Yulduzlar bilan to'lash",
+  starsPaid: "To'lov qabul qilindi! Balans yangilanmoqda...",
+  starsCancelled: "To'lov bekor qilindi",
+  starsFailed: "To'lov amalga oshmadi, qayta urinib ko'ring",
+  starsError: "Hisob yaratib bo'lmadi, birozdan keyin urinib ko'ring",
+  starsOnlyTelegram: "Yulduzlar bilan to'lash faqat Telegram ichida ishlaydi",
 };
 
 const ru: typeof uz = {
@@ -207,6 +218,16 @@ const ru: typeof uz = {
 
   tabUC: "UC",
   tabShop: "Магазин",
+
+  methodCard: "Карта",
+  methodStars: "Telegram Stars",
+  starsInfo: "Оплатите звёздами прямо в Telegram — баланс пополнится мгновенно.",
+  starsPay: "Оплатить звёздами",
+  starsPaid: "Платёж принят! Баланс обновляется...",
+  starsCancelled: "Платёж отменён",
+  starsFailed: "Платёж не прошёл, попробуйте ещё раз",
+  starsError: "Не удалось создать счёт, попробуйте позже",
+  starsOnlyTelegram: "Оплата звёздами работает только внутри Telegram",
 };
 
 export const dict: Record<Lang, typeof uz> = { uz, ru };

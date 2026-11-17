@@ -212,6 +212,13 @@ export default function Home() {
   const [copiedCard, setCopiedCard] = useState(false);
   const [copiedSum, setCopiedSum] = useState(false);
 
+  // ---- оплата звёздами ----
+  const [topUpMethod, setTopUpMethod] = useState<"card" | "stars">("card");
+  const [starsPacks, setStarsPacks] = useState<{ stars: number; uzs: number }[]>([]);
+  const [starsSel, setStarsSel] = useState<number | null>(null);
+  const [starsBusy, setStarsBusy] = useState(false);
+  const [starsMsg, setStarsMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
   // ===================== TELEGRAM / ЗАГРУЗКА =====================
 
   const getInitData = (): string =>
@@ -376,6 +383,7 @@ export default function Home() {
   const openTopUp = () => {
     haptic("light");
     setTopUpOpen(true);
+    setStarsMsg(null);
     setTopUpStatus("idle");
     setTopUpError("");
     setDepositId(null);
@@ -454,6 +462,59 @@ export default function Home() {
   const secondsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - now) / 1000)) : 0;
   const timeLabel = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`;
   const expired = topUpStatus === "pending" && secondsLeft === 0;
+
+  // Пакеты звёзд подгружаем при первом открытии вкладки «Stars»
+  useEffect(() => {
+    if (!topUpOpen || topUpMethod !== "stars" || starsPacks.length > 0) return;
+    fetch("/api/stars/invoice")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.packs)) {
+          setStarsPacks(d.packs);
+          setStarsSel(d.packs[1]?.stars ?? d.packs[0]?.stars ?? null);
+        }
+      })
+      .catch(() => {});
+  }, [topUpOpen, topUpMethod, starsPacks.length]);
+
+  const payWithStars = async () => {
+    if (!starsSel || starsBusy) return;
+    const tg = window.Telegram?.WebApp;
+    if (!tg?.openInvoice) {
+      setStarsMsg({ text: t("starsOnlyTelegram"), ok: false });
+      return;
+    }
+    setStarsBusy(true);
+    setStarsMsg(null);
+    try {
+      const res = await fetch("/api/stars/invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData: getInitData(), stars: starsSel }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.link) {
+        setStarsMsg({ text: t("starsError"), ok: false });
+        return;
+      }
+      tg.openInvoice(data.link, (status: string) => {
+        if (status === "paid") {
+          haptic("success");
+          setStarsMsg({ text: t("starsPaid"), ok: true });
+          // зачисление приходит от Telegram через вебхук — несколько раз обновляем баланс
+          [1500, 4000, 8000].forEach((ms) => setTimeout(loadBalance, ms));
+        } else if (status === "cancelled") {
+          setStarsMsg({ text: t("starsCancelled"), ok: false });
+        } else if (status === "failed") {
+          setStarsMsg({ text: t("starsFailed"), ok: false });
+        }
+      });
+    } catch {
+      setStarsMsg({ text: t("starsError"), ok: false });
+    } finally {
+      setStarsBusy(false);
+    }
+  };
 
   const copy = async (text: string, set: (v: boolean) => void) => {
     try {
@@ -885,6 +946,45 @@ export default function Home() {
 
           <div className="sheet-body">
             {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
+              <div className="seg" style={{ marginBottom: 16 }}>
+                <button className={topUpMethod === "card" ? "on" : ""} onClick={() => { haptic("light"); setTopUpMethod("card"); }}>
+                  {t("methodCard")}
+                </button>
+                <button className={topUpMethod === "stars" ? "on" : ""} onClick={() => { haptic("light"); setTopUpMethod("stars"); }}>
+                  ⭐ {t("methodStars")}
+                </button>
+              </div>
+            )}
+
+            {topUpMethod === "stars" && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
+              <>
+                <p className="muted small">{t("starsInfo")}</p>
+                <div className="packs" style={{ marginTop: 12 }}>
+                  {starsPacks.map((sp) => (
+                    <button
+                      key={sp.stars}
+                      className={`pack press ${starsSel === sp.stars ? "picked" : ""}`}
+                      onClick={() => { haptic("light"); setStarsSel(sp.stars); }}
+                    >
+                      <div className="pack-text">
+                        <b>⭐ {sp.stars}</b>
+                        <span>{fmt(sp.uzs)} UZS</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {starsMsg && (
+                  <div className={starsMsg.ok ? "coupon" : "error"} style={{ marginTop: 14 }}>
+                    <span>{starsMsg.text}</span>
+                  </div>
+                )}
+                <button className="btn btn-primary press" style={{ marginTop: 18 }} disabled={starsBusy || !starsSel} onClick={payWithStars}>
+                  {starsBusy ? t("sending") : `⭐ ${t("starsPay")}`}
+                </button>
+              </>
+            )}
+
+            {topUpMethod === "card" && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
               <>
                 <div className="field">
                   <label>{t("topUpAmountLabel")}</label>
@@ -1142,6 +1242,7 @@ button { font-family: inherit; color: inherit; }
   display: flex; align-items: center; justify-content: space-between; gap: 6px; cursor: pointer; text-align: left;
 }
 .pack-text { min-width: 0; }
+.pack.picked { border-color: #B98BFF; box-shadow: 0 0 0 2px rgba(185,139,255,.35); }
 .pack b { display: block; font-size: 13.5px; line-height: 1.2; }
 .pack span { display: block; margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--a); }
 .pack img { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }

@@ -57,6 +57,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Server xatosi' }, { status: 500 });
     }
 
+    // 3b. Пополнения звёздами (последние 100)
+    const { data: starsPays } = await supabase
+      .from('stars_payments')
+      .select('id, amount, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
     // 4. Единый формат
     const formattedOrders = (orders || []).map((o) => ({
       id: `ord_${o.id}`,
@@ -78,8 +86,18 @@ export async function GET(request: Request) {
       created_at: d.created_at,
     }));
 
+    const formattedStars = (starsPays || []).map((s) => ({
+      id: `star_${s.id}`,
+      title: "Hamyonni to'ldirish (Stars ⭐)",
+      amount: Number(s.amount || 0),
+      type: 'deposit',
+      status: 'approved' as const,
+      target_id: null,
+      created_at: s.created_at,
+    }));
+
     // 5. Объединяем, сначала свежие
-    const allHistory = [...formattedOrders, ...formattedDeposits].sort(
+    const allHistory = [...formattedOrders, ...formattedDeposits, ...formattedStars].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
