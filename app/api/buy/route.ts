@@ -237,19 +237,15 @@ async function notifyAdmin(text: string) {
 // Запрос в Ludovex API. Возвращает null, если ответа вообще не было (сеть/таймаут).
 async function callLudovex(payload: Record<string, any>, idempotencyKey: string) {
   try {
-    // Согласно документации Ludovex, idempotency_key передается внутри JSON тела запроса
-    const bodyWithIdempotency = {
-      ...payload,
-      idempotency_key: idempotencyKey,
-    };
-
-    const response = await fetch('https://ludovex.org/api/v2/order', {
+    // По актуальной документации Ludovex ключ идемпотентности передаётся ЗАГОЛОВКОМ Idempotency-Key
+    const response = await fetch('https://api.ludovex.org/api/v2/order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': process.env.LUDOVEX_API_KEY || process.env.PAYERPIN_API_KEY || '',
+        'Idempotency-Key': idempotencyKey,
       },
-      body: JSON.stringify(bodyWithIdempotency),
+      body: JSON.stringify(payload),
     });
 
     const raw = await response.text();
@@ -429,7 +425,6 @@ export async function POST(request: Request) {
     };
 
     if (finalServerId) {
-      ludovexPayload.server_id = String(finalServerId).trim();
       ludovexPayload.zone_id = String(finalServerId).trim();
     }
 

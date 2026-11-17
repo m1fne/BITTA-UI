@@ -1,529 +1,221 @@
 "use client";
+
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import WalletView from "./components/wallet";
 import HistoryView from "./components/history";
-import Banner from "./components/banner";
+import { translate, type Lang, type TKey } from "./i18n";
 
+// ===================== ТИПЫ TELEGRAM =====================
 
-import { useState, useEffect, ChangeEvent } from "react";
-
-// Типы Telegram SDK
 declare global {
   interface Window {
-    Telegram?: {
-      WebApp: {
-        ready: () => void;
-        expand: () => void;
-        openLink: (url: string) => void;
-        openTelegramLink: (url: string) => void;
-        sendData: (data: string) => void;
-        initData?: string;
-        initDataUnsafe?: {
-          user?: {
-            id: number;
-            first_name?: string;
-            last_name?: string;
-            username?: string;
-            photo_url?: string;
-          };
-        };
-        HapticFeedback?: {
-          impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
-          notificationOccurred: (type: "error" | "success" | "warning") => void;
-        };
-      };
-    };
+    Telegram?: { WebApp: any };
   }
 }
 
 type ShopType = "pubg" | "freefire" | "premium" | "mlbb" | "bloodstrike";
+type View = "home" | "wallet" | "history" | "profile";
+type Pack = { name: string; price: number; icon?: string; scale?: number; tab?: "UC" | "SHOP"; months?: number };
 
+// ===================== КАТАЛОГ =====================
+// ВАЖНО: поле name уходит на сервер и по нему определяется товар — не меняйте названия.
 
-// ===================== ДАННЫЕ =====================
-
-const adPartners = [
-  {
-    id: 1,
-    title: "Uzum Market Hamkori",
-    desc: "Eng tez yetkazib berish va arzon narxlar do'koni!",
-    link: "https://uzum.uz",
-    category: "market",
-    badge: "Offline Market",
-  },
-];
-
-const shopProducts: Record<
+const SHOPS: Record<
   ShopType,
-  { 
-    title: string; 
-    placeholder: string; 
-    tabs?: string[];
-    packs: { name: string; price: string; icon?: string; scale?: number; type?: 'UC' | 'SHOP' }[] 
-  }
+  { title: string; logo: string; packIcon: string; accent: string; accent2: string; hasTabs?: boolean; packs: Pack[] }
 > = {
-pubg: {
+  pubg: {
     title: "PUBG Mobile",
-    placeholder: "Player ID (masalan: 5123456789)",
-    tabs: ["UC", "SHOP"],
+    logo: "/pubg_mobile.jpg",
+    packIcon: "/pubgmobileuc.png",
+    accent: "#FF5F7E",
+    accent2: "#FF9D5C",
+    hasTabs: true,
     packs: [
-      // ==================== UC ====================
-      { name: "60 UC", price: "13,000", icon: "/pubgmobileuc.png", type: "UC" },
-      { name: "325 UC", price: "58,000", icon: "/325uc.png", scale: 1.4, type: "UC" },
-      { name: "660 UC", price: "115,000", icon: "/660uc.png", scale: 2.5, type: "UC" },
-      { name: "1800 UC", price: "285,000", icon: "/1800uc.png", scale: 1.2, type: "UC" },
-      { name: "3850 UC", price: "560,000", icon: "/3850uc.png", scale: 1.3, type: "UC" },
-      { name: "8100 UC", price: "1,130,000", icon: "/8100uc.png", scale: 1.5, type: "UC" },
+      { name: "60 UC", price: 13000, icon: "/pubgmobileuc.png", tab: "UC" },
+      { name: "325 UC", price: 58000, icon: "/325uc.png", scale: 1.4, tab: "UC" },
+      { name: "660 UC", price: 115000, icon: "/660uc.png", scale: 2.5, tab: "UC" },
+      { name: "1800 UC", price: 285000, icon: "/1800uc.png", scale: 1.2, tab: "UC" },
+      { name: "3850 UC", price: 560000, icon: "/3850uc.png", scale: 1.3, tab: "UC" },
+      { name: "8100 UC", price: 1130000, icon: "/8100uc.png", scale: 1.5, tab: "UC" },
 
-      // ==================== SHOP ====================
-      // --- Prime ---
-      { name: "Prime (1 Month)", price: "14,000", icon: "/prime_month.png", type: "SHOP" },
-      { name: "Prime (3 Months)", price: "36,000", icon: "/prime_month.png", type: "SHOP" },
-      { name: "Prime (6 Months)", price: "70,000", icon: "/prime_month.png", type: "SHOP" },
-      { name: "Prime (12 Months)", price: "135,000", icon: "/prime_year.png", type: "SHOP" },
+      { name: "Prime (1 Month)", price: 14000, icon: "/prime_month.png", tab: "SHOP" },
+      { name: "Prime (3 Months)", price: 36000, icon: "/prime_month.png", tab: "SHOP" },
+      { name: "Prime (6 Months)", price: 70000, icon: "/prime_month.png", tab: "SHOP" },
+      { name: "Prime (12 Months)", price: 135000, icon: "/prime_year.png", tab: "SHOP" },
 
-      // --- Prime Plus ---
-      { name: "Prime Plus (1 Month)", price: "120,000", icon: "/prime_plus_month.png", type: "SHOP" },
-      { name: "Prime Plus (3 Months)", price: "330,000", icon: "/prime_plus_month.png", type: "SHOP" },
-      { name: "Prime Plus (6 Months)", price: "639,000", icon: "/prime_plus_month.png", type: "SHOP" },
-      { name: "Prime Plus (12 Months)", price: "1,350,000", icon: "/prime_plus_year.webp", type: "SHOP" },
+      { name: "Prime Plus (1 Month)", price: 120000, icon: "/prime_plus_month.png", tab: "SHOP" },
+      { name: "Prime Plus (3 Months)", price: 330000, icon: "/prime_plus_month.png", tab: "SHOP" },
+      { name: "Prime Plus (6 Months)", price: 639000, icon: "/prime_plus_month.png", tab: "SHOP" },
+      { name: "Prime Plus (12 Months)", price: 1350000, icon: "/prime_plus_year.webp", tab: "SHOP" },
 
-      // --- Паки, Эмблемы и Материалы ---
-      { name: "First Purchase Pack", price: "15,000", icon: "/first_purchase_pack.webp", type: "SHOP" },
-      { name: "Weekly Deal Pack 1", price: "15,000", icon: "/pack.webp", type: "SHOP" },
-      { name: "Weekly Deal Pack 2", price: "36,000", icon: "/pack.webp", type: "SHOP" },
-      { name: "Weekly Mythic Emblem Value Pack", price: "36,000", icon: "/pack.webp", type: "SHOP" },
-      { name: "Mythic Emblem Pack", price: "60,000", icon: "/pack_3.webp", type: "SHOP" },
-      { name: "Upgradable Firearm Materials Pack", price: "36,000", icon: "/pack_2.webp", type: "SHOP" },
+      { name: "First Purchase Pack", price: 15000, icon: "/first_purchase_pack.webp", tab: "SHOP" },
+      { name: "Weekly Deal Pack 1", price: 15000, icon: "/pack.webp", tab: "SHOP" },
+      { name: "Weekly Deal Pack 2", price: 36000, icon: "/pack.webp", tab: "SHOP" },
+      { name: "Weekly Mythic Emblem Value Pack", price: 36000, icon: "/pack.webp", tab: "SHOP" },
+      { name: "Mythic Emblem Pack", price: 60000, icon: "/pack_3.webp", tab: "SHOP" },
+      // "Upgradable Firearm Materials Pack" убран: его нет в каталоге Ludovex, покупка всё равно не прошла бы.
     ],
   },
   freefire: {
-    title: "Free Fire Almazlar",
-    placeholder: "Player ID (masalan: 78291044)",
+    title: "Free Fire",
+    logo: "/ff_diamonds.jpg",
+    packIcon: "/ffdiamonds.png",
+    accent: "#FFD166",
+    accent2: "#FF9D5C",
     packs: [
-      { name: "110 Almaz", price: "12,000 UZS" },
-      { name: "341 Almaz", price: "32,000 UZS" },
-      { name: "572 Almaz", price: "53,000 UZS" },
-      { name: "1166 Almaz", price: "101,000 UZS" },
-      { name: "2398 Almaz", price: "199,000 UZS" },
-      { name: "6160 Almaz", price: "495,000 UZS" },
+      { name: "110 Almaz", price: 12000 },
+      { name: "341 Almaz", price: 32000 },
+      { name: "572 Almaz", price: 53000 },
+      { name: "1166 Almaz", price: 101000 },
+      { name: "2398 Almaz", price: 199000 },
+      { name: "6160 Almaz", price: 495000 },
     ],
   },
-mlbb: {
+  mlbb: {
     title: "Mobile Legends",
-    placeholder: "User ID va Zone ID kiriting (masalan: 12345678 1234)",
+    logo: "/mobile_legends.jpg",
+    packIcon: "/mlbbdiamonds.png",
+    accent: "#37E5C4",
+    accent2: "#2FA8E8",
     packs: [
-      { name: "14 Diamonds", price: "5 000 so'm" },
-      { name: "42 Diamonds", price: "11 000 so'm" },
-      { name: "170 Diamonds", price: "38 000 so'm" },
-      { name: "284 Diamonds", price: "62 000 so'm"},
-      { name: "706 Diamonds", price: "115 000 so'm" },
-      { name: "1084 diamonds", price: "220 000 so'm" },
-      { name: "3688 diamonds", price: "590 000 so'm" },
+      { name: "14 Diamonds", price: 5000 },
+      { name: "42 Diamonds", price: 11000 },
+      { name: "170 Diamonds", price: 38000 },
+      { name: "284 Diamonds", price: 62000 },
+      { name: "706 Diamonds", price: 115000 },
+      { name: "1084 diamonds", price: 220000 },
+      { name: "3688 diamonds", price: 590000 },
     ],
   },
-    bloodstrike: {
+  bloodstrike: {
     title: "Blood Strike",
-    placeholder: "Player ID kiriting (masalan: 1234567890)",
+    logo: "/bloodstrike.jpg",
+    packIcon: "/bloodstrikebc.png",
+    accent: "#FF5F7E",
+    accent2: "#FF8A5C",
     packs: [
-      { name: "51 BC", price: "8,000 so'm" },
-      { name: "105 BC", price: "12,000 so'm" },
-      { name: "320 BC", price: "34,000 so'm" },
-      { name: "540 BC", price: "50,000 so'm" },
-      { name: "1100 BC", price: "96,000 so'm" },
-      { name: "2260 BC", price: "190,000 so'm" },
-      { name: "5800 BC", price: "473,000 so'm" },
+      { name: "51 BC", price: 8000 },
+      { name: "105 BC", price: 12000 },
+      { name: "320 BC", price: 34000 },
+      { name: "540 BC", price: 50000 },
+      { name: "1100 BC", price: 96000 },
+      { name: "2260 BC", price: 190000 },
+      { name: "5800 BC", price: 473000 },
     ],
   },
   premium: {
     title: "Telegram Premium",
-    placeholder: "Telegram Username (masalan: @username)",
+    logo: "/telegram_premium.jpg",
+    packIcon: "/tg_prem_icon.png",
+    accent: "#B98BFF",
+    accent2: "#6E6BFF",
     packs: [
-      { name: "3 Oy ", price: "160,000 UZS", icon: "/tg_prem_icon.png" },
-      { name: "6 Oy ", price: "220,000 UZS", icon: "/tg_prem_icon.png" },
-      { name: "12 Oy ", price: "390,000 UZS", icon: "/tg_prem_icon.png" },
+      { name: "3 Oy", price: 160000, icon: "/tg_prem_icon.png", months: 3 },
+      { name: "6 Oy", price: 220000, icon: "/tg_prem_icon.png", months: 6 },
+      { name: "12 Oy", price: 390000, icon: "/tg_prem_icon.png", months: 12 },
     ],
   },
 };
 
-const gameLogos: Record<string, string> = {
-  pubg: "/pubg_mobile.jpg",
-  freefire: "/ff_diamonds.jpg",
-  premium: "/telegram_premium.jpg",
-  mlbb: "/mobile_legends.jpg",
-  bloodstrike: "/bloodstrike.jpg",
-};
-
-const shopImages: Record<string, string> = {
-  pubg: "/pubgmobileuc.png",
-  freefire: "/ffdiamonds.png",
-  telegram: "/tg_prem_icon.png.png",
-  mlbb: "/mlbbdiamonds.png",
-  bloodstrike: "/bloodstrikebc.png",
-};
+const SHOP_ORDER: ShopType[] = ["pubg", "freefire", "premium", "mlbb", "bloodstrike"];
 
 // ===================== ИКОНКИ =====================
 
-const Icons = {
-  Gamepad: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="6" y1="12" x2="10" y2="12" /><line x1="8" y1="10" x2="8" y2="14" /><line x1="15" y1="13" x2="15.01" y2="13" /><line x1="18" y1="11" x2="18.01" y2="11" />
-      <rect x="2" y="6" width="20" height="12" rx="3" />
-    </svg>
-  ),
-  Diamond: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.7 10.3l9.3 9.3 9.3-9.3L12 3 2.7 10.3z" />
-    </svg>
-  ),
-  Premium: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 22 8.5 17 22 7 22 2 8.5 12 2" />
-    </svg>
-  ),
+const svg = (children: React.ReactNode, size = 20, sw = 2) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
 
-
-
-  Search: () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  ),
+const Icon = {
+  Home: () => svg(<><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /></>, 22),
+  Wallet: (p: { size?: number }) => svg(<><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></>, p?.size ?? 22),
+  History: () => svg(<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>, 22),
+  User: () => svg(<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>, 22),
+  Back: () => svg(<polyline points="15 6 9 12 15 18" />, 20, 2.5),
+  Close: () => svg(<><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>, 16, 2.5),
+  Chevron: () => svg(<polyline points="9 6 15 12 9 18" />, 16, 2.5),
+  Check: () => svg(<polyline points="20 6 9 17 4 12" />, 14, 3),
   Sparkle: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2l1.9 5.9L20 10l-6.1 2.1L12 18l-1.9-5.9L4 10l6.1-2.1L12 2z" />
     </svg>
   ),
-  Check: () => (
-    <svg width="56" height="56" viewBox="0 0 52 52" fill="none">
+  Headphones: () => svg(<><path d="M3 18v-6a9 9 0 0 1 18 0v6" /><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" /></>, 18),
+  Megaphone: () => svg(<><path d="M3 11l18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>, 18),
+  Gift: () => svg(<><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5" /></>, 20),
+  BigCheck: () => (
+    <svg width="64" height="64" viewBox="0 0 52 52" fill="none">
       <circle cx="26" cy="26" r="24" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-      <path d="M15 27l7 7 15-16" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="bt-check-path" />
+      <path d="M15 27l7 7 15-16" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="check-path" />
     </svg>
   ),
-  XCircle: () => (
-    <svg width="56" height="56" viewBox="0 0 52 52" fill="none">
+  BigX: () => (
+    <svg width="64" height="64" viewBox="0 0 52 52" fill="none">
       <circle cx="26" cy="26" r="24" stroke="currentColor" strokeWidth="2" opacity="0.25" />
       <line x1="18" y1="18" x2="34" y2="34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
       <line x1="34" y1="18" x2="18" y2="34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
     </svg>
   ),
-  Wallet: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="16" rx="3" />
-      <path d="M16 12h.01" />
-      <path d="M18 8H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2z" />
-    </svg>
-  ),
-  Upload: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  ),
-  Close: () => (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  ),
-  CheckSmall: () => (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  ),
-  Clock: () => (
-    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  ),
-  ChevronRight: () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 6 15 12 9 18" />
-    </svg>
-  ),
-  ChevronLeft: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 6 9 12 15 18" />
-    </svg>
-  ),
-  User: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  ),
-  Rocket: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
-      <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
-      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
-      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
-    </svg>
-  ),
-  Headphones: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-    </svg>
-  ),
-  Megaphone: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 11l18-5v12L3 13v-2z" />
-      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
-    </svg>
-  ),
-  FileText: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  ),
-  Bot: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="10" width="18" height="10" rx="3" />
-      <circle cx="8.5" cy="15" r="1.3" fill="currentColor" stroke="none" />
-      <circle cx="15.5" cy="15" r="1.3" fill="currentColor" stroke="none" />
-      <path d="M12 10V6" /><circle cx="12" cy="4.5" r="1.5" />
-      <path d="M3 14H1M23 14h-2" />
-    </svg>
-  ),
-  Send: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-    </svg>
-  ),
+  BigClock: () => svg(<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>, 56, 1.6),
 };
 
-// ===================== ЦВЕТОВЫЕ ТЕМЫ =====================
+// ===================== ВСПОМОГАТЕЛЬНОЕ =====================
 
-const themes = {
-  pink: { grad: "linear-gradient(135deg,#FF5F7E,#FF9D5C)", glow: "rgba(255,95,126,.38)" },
-  gold: { grad: "linear-gradient(135deg,#FFD166,#FF9D5C)", glow: "rgba(255,209,102,.35)" },
-  blue: { grad: "linear-gradient(135deg,#37CFEA,#6E6BFF)", glow: "rgba(55,207,234,.35)" },
-  violet: { grad: "linear-gradient(135deg,#B98BFF,#6E6BFF)", glow: "rgba(185,139,255,.38)" },
-  teal: { grad: "linear-gradient(135deg,#37E5C4,#2FA8E8)", glow: "rgba(55,229,196,.35)" },
-};
+const fmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
-const shopTheme: Record<ShopType, typeof themes.pink> = {
-  pubg: themes.pink,
-  freefire: themes.gold,
-  premium: themes.violet,
-  mlbb: themes.teal, // Добавили тему для Mobile Legends
-    bloodstrike: themes.pink,
-};
+const CARD_NUMBER = "9860196619614445";
+const CARD_NUMBER_VIEW = "9860 1966 1961 4445";
+const CARD_OWNER = "MUSA X.";
 
-// Иконки для заголовков модалок (вместо emoji)
-const shopIcons: Record<ShopType, () => JSX.Element> = {
-  pubg: Icons.Gamepad,
-  freefire: Icons.Diamond,
-  premium: Icons.Premium,
-  mlbb: () => (
-    <img 
-      src="/mobile_legends.jpg" 
-      alt="MLBB" 
-      style={{ width: "20px", height: "20px", borderRadius: "4px", objectFit: "cover" }} 
-    />
-  ),
-    bloodstrike: () => (
-    <img 
-      src="/bloodstrike.jpg" 
-      alt="Blood Strike" 
-      style={{ width: "20px", height: "20px", borderRadius: "4px", objectFit: "cover" }} 
-        />
-  ),
-};
-
-
-
+type TopUpStatus = "idle" | "submitting" | "pending" | "approved" | "rejected" | "error";
 
 // ===================== КОМПОНЕНТ =====================
 
 export default function Home() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userBalance, setUserBalance] = useState(0);
+  // ---- язык ----
+  const [lang, setLang] = useState<Lang>("uz");
+  const t = (key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars);
+  const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // ✅ Безопасное получение пользователя Telegram (не ломает Next.js на сервере)
-  const u = typeof window !== "undefined" 
-    ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user 
-    : null;
+  // ---- общее ----
+  const [view, setView] = useState<View>("home");
+  const [balance, setBalance] = useState(0);
+  const [tgUser, setTgUser] = useState<any>(null);
+  const [referral, setReferral] = useState<{ invited: number; earned: number; available: number; percent: number } | null>(null);
+  const [faqOpen, setFaqOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
 
-  // Навигация: home -> market -> wallet -> history -> profile
-  const [activeView, setActiveView] = useState<"home" | "market" | "wallet" | "history" | "profile">("home");
-  
-  // Выбор языка в профиле
-  const [uiLanguage, setUiLanguage] = useState<"uz" | "ru" | "en">("uz");
+  // ---- магазин ----
+  const [shopType, setShopType] = useState<ShopType | null>(null);
+  const [shopStep, setShopStep] = useState<1 | 2 | 4>(1);
+  const [tab, setTab] = useState<"UC" | "SHOP">("UC");
+  const [pack, setPack] = useState<Pack | null>(null);
+  const [playerId, setPlayerId] = useState("");
+  const [zoneId, setZoneId] = useState("");
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState<{ text: string; noBalance: boolean } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Покупка в магазине (списание с баланса)
-  const [buyError, setBuyError] = useState("");
-  const [isBuying, setIsBuying] = useState(false);
-
-  // ПОПОЛНЕНИЕ БАЛАНСА
-  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  // ---- пополнение ----
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState("");
-  const [topUpReceiptName, setTopUpReceiptName] = useState("");
-  const [topUpReceiptFile, setTopUpReceiptFile] = useState<File | null>(null);
-  const [topUpCopied, setTopUpCopied] = useState(false);
-  const [topUpStatus, setTopUpStatus] = useState<"idle" | "submitting" | "pending" | "approved" | "rejected" | "expired" | "error">("idle");
+  const [topUpStatus, setTopUpStatus] = useState<TopUpStatus>("idle");
   const [topUpError, setTopUpError] = useState("");
   const [depositId, setDepositId] = useState<string | null>(null);
-  const [topUpPayAmount, setTopUpPayAmount] = useState<number | null>(null);
-  const [topUpExpiresAt, setTopUpExpiresAt] = useState<number | null>(null);
-  const [topUpNow, setTopUpNow] = useState<number>(Date.now());
-  const [topUpAmountCopied, setTopUpAmountCopied] = useState(false);
+  const [payAmount, setPayAmount] = useState<number | null>(null);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [copiedCard, setCopiedCard] = useState(false);
+  const [copiedSum, setCopiedSum] = useState(false);
 
-  // МАРКЕТ / МАГАЗИН
-  const [isShopOpen, setIsShopOpen] = useState(false);
-  const [activeShopType, setActiveShopType] = useState<ShopType | null>(null);
-  const [shopStep, setShopStep] = useState(1); // 1 tanlash, 2 malumot, 3 tolov, 4 tayyor
-  const [selectedPack, setSelectedPack] = useState<{ name: string; price: string } | null>(null);
-  const [userCredential, setUserCredential] = useState("");
-  const [activeTab, setActiveTab] = useState<'UC' | 'SHOP'>('UC');
-  const [serverId, setServerId] = useState('');
-  // МОДАЛКИ FAQ И ОФЕРТЫ
-  const [isFaqOpen, setIsFaqOpen] = useState(false);
-  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  // ===================== TELEGRAM / ЗАГРУЗКА =====================
 
-  const handleOpenFaq = () => setIsFaqOpen(true);
-  const handleOpenTerms = () => setIsTermsOpen(true);
-
-
- 
-useEffect(() => {
-  if (activeView === "profile" || isShopOpen) loadReferral();
-}, [activeView, isShopOpen]);
-
-// 1. Подключение скрипта Telegram (Твой существующий)
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-web-app.js";
-    script.async = true;
-    script.onload = () => {
-      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-      }
-      loadBalance();
-    };
-    document.body.appendChild(script);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
- 
-
-  // 2. [ДОБАВЛЕНО] Авто-закрытие магазина при переключении нижних табов
-  useEffect(() => {
-    setIsShopOpen(false);
-  }, [activeView]);
-
-  // 3. [ДОБАВЛЕНО] Кнопка «Назад» Telegram и жест свайпа для Android
-  useEffect(() => {
-    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
-
-    const handleBack = () => {
-      setIsShopOpen(false);
-    };
-
-    if (isShopOpen) {
-      if (tg?.BackButton) {
-        tg.BackButton.show();
-        tg.BackButton.onClick(handleBack);
-      }
-
-      window.history.pushState({ modal: 'shop' }, '');
-
-      const handlePopState = () => {
-        setIsShopOpen(false);
-      };
-
-      window.addEventListener('popstate', handlePopState);
-
-      return () => {
-        if (tg?.BackButton) {
-          tg.BackButton.hide();
-          tg.BackButton.offClick(handleBack);
-        }
-        window.removeEventListener('popstate', handlePopState);
-      };
-    } else {
-      if (tg?.BackButton) {
-        tg.BackButton.hide();
-      }
-    }
-  }, [isShopOpen]);
-
-  const getInitData = (): string => {
-    if (typeof window === "undefined") return "";
-    return window.Telegram?.WebApp ? (window.Telegram.WebApp as any).initData ?? "" : "";
-  };
-
-  // Данные для отображения в профиле (имя/юзернейм/аватар) — берём напрямую из Telegram
-  // WebApp SDK на клиенте, отдельный запрос на сервер для этого не нужен.
-  const getTelegramProfile = () => {
-    if (typeof window === "undefined") return null;
-    const u = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (!u) return null;
-    return {
-      firstName: u.first_name ?? "",
-      lastName: u.last_name ?? "",
-      username: u.username ?? "",
-      photoUrl: u.photo_url ?? "",
-    };
-  };
-
-const loadBalance = async () => {
-    const initData = getInitData();
-    if (!initData) return;
-    try {
-      const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}`);
-      const data = await res.json();
-      
-      if (res.ok && typeof data.balance === "number") {
-        setUserBalance(data.balance);
-      } else {
-        // Показывает точную причину прямо в приложении
-        console.log("ОБРАБОТКА БАЛАНСА:", res.status, data);
-      }
-    } catch (err) {
-      console.error("Ошибка сети баланса:", err);
-    }
-  };
-
-  useEffect(() => {
-  try {
-    const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
-    if (!initData) return;
-    fetch("/api/user/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initData }),
-    }).catch(() => {});
-  } catch {
-    // ничего не делаем
-  }
-}, []);
-
-  // Пока заявка на пополнение "на рассмотрении" — спрашиваем сервер, не решил ли админ.
-  useEffect(() => {
-    if (topUpStatus !== "pending" || !depositId) return;
-    const interval = setInterval(async () => {
-      const initData = getInitData();
-      try {
-        const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}&id=${depositId}`);
-        const data = await res.json();
-        if (res.ok && data.deposit?.status && data.deposit.status !== "pending") {
-          setTopUpStatus(data.deposit.status); // "approved" | "rejected"
-          if (data.deposit.status === "approved") {
-            haptic("success");
-            loadBalance();
-          }
-        }
-      } catch {
-        // попробуем на следующем тике
-      }
-    }, 3000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topUpStatus, depositId]);
+  const getInitData = (): string =>
+    typeof window !== "undefined" ? window.Telegram?.WebApp?.initData ?? "" : "";
 
   const haptic = (type: "light" | "medium" | "success" = "light") => {
     const hf = typeof window !== "undefined" ? window.Telegram?.WebApp?.HapticFeedback : undefined;
@@ -532,2451 +224,981 @@ const loadBalance = async () => {
     else hf.impactOccurred(type);
   };
 
-  const openLinkInside = (url: string) => {
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      window.Telegram.WebApp.openLink(url);
-    } else {
-      window.open(url, "_blank");
-    }
-  };
-
   const openTelegramLink = (url: string) => {
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    if (typeof window !== "undefined" && window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(url);
     } else {
       window.open(url, "_blank");
     }
   };
 
-  const sendDataToBot = (data: object) => {
-    if (typeof window !== "undefined" && window.Telegram?.WebApp?.sendData) {
-      window.Telegram.WebApp.sendData(JSON.stringify(data));
-    } else {
-      alert("Telegram Botga yuborildi:\n" + JSON.stringify(data, null, 2));
+  const loadBalance = async () => {
+    const initData = getInitData();
+    if (!initData) return;
+    try {
+      const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}`);
+      const data = await res.json();
+      if (res.ok && typeof data.balance === "number") setBalance(data.balance);
+    } catch {
+      // сеть пропала — попробуем при следующем действии
     }
   };
 
-  // ПОПОЛНЕНИЕ БАЛАНСА
-  const handleOpenTopUp = () => {
+  const loadReferral = async () => {
+    const initData = getInitData();
+    if (!initData) return;
+    try {
+      const res = await fetch("/api/referral/state", { headers: { "x-telegram-init-data": initData } });
+      const data: any = await res.json();
+      if (res.ok && data.success) {
+        setReferral({ invited: data.invited, earned: data.earned, available: data.available, percent: data.percent });
+      }
+    } catch {
+      // ничего не делаем
+    }
+  };
+
+  // Всё, что нужно после того, как Telegram SDK загрузился (раньше initData мог быть пустым)
+  useEffect(() => {
+    let started = false;
+    const boot = () => {
+      if (started) return;
+      started = true;
+      const tg = window.Telegram?.WebApp;
+      try {
+        tg?.ready();
+        tg?.expand();
+      } catch {}
+      setTgUser(tg?.initDataUnsafe?.user ?? null);
+
+      // язык: сохранённый выбор → язык Telegram → uz
+      let saved: string | null = null;
+      try {
+        saved = localStorage.getItem("bitta_lang");
+      } catch {}
+      if (saved === "uz" || saved === "ru") setLang(saved);
+      else if (tg?.initDataUnsafe?.user?.language_code === "ru") setLang("ru");
+
+      const initData = tg?.initData ?? "";
+      if (!initData) return;
+
+      loadBalance();
+      loadReferral();
+
+      fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData, action: "me" }),
+      })
+        .then((r) => r.json())
+        .then((d) => setIsAdmin(!!d?.isAdmin))
+        .catch(() => {});
+
+      fetch("/api/user/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData }),
+      }).catch(() => {});
+
+      const sp = new URLSearchParams(initData).get("start_param") || "";
+      if (sp.startsWith("ref_")) {
+        fetch("/api/referral/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData }),
+        }).catch(() => {});
+      }
+    };
+
+    if (window.Telegram?.WebApp) {
+      boot();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-web-app.js";
+    script.async = true;
+    script.onload = boot;
+    script.onerror = boot; // открыто не из Telegram — просто показываем интерфейс
+    document.body.appendChild(script);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const chooseLang = (l: Lang) => {
     haptic("light");
-    setIsTopUpOpen(true);
+    setLang(l);
+    try {
+      localStorage.setItem("bitta_lang", l);
+    } catch {}
+  };
+
+  // Обновляем купоны при открытии профиля / магазина
+  useEffect(() => {
+    if (view === "profile" || shopType) loadReferral();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, shopType]);
+
+  // Закрываем магазин при смене вкладки снизу
+  useEffect(() => {
+    closeShop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  // ===================== КНОПКА «НАЗАД» TELEGRAM =====================
+
+  const handleBack = () => {
+    if (topUpOpen) setTopUpOpen(false);
+    else if (shopType && shopStep === 2) {
+      setShopStep(1);
+      setBuyError(null);
+    } else closeShop();
+  };
+
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
+
+  useEffect(() => {
+    const bb = window.Telegram?.WebApp?.BackButton;
+    if (!bb) return;
+    const cb = () => handleBackRef.current();
+    if (topUpOpen || shopType) {
+      bb.show();
+      bb.onClick(cb);
+    } else {
+      bb.hide();
+    }
+    return () => {
+      bb.offClick?.(cb);
+    };
+  }, [topUpOpen, shopType]);
+
+  // ===================== ПОПОЛНЕНИЕ =====================
+
+  const openTopUp = () => {
+    haptic("light");
+    setTopUpOpen(true);
     setTopUpStatus("idle");
     setTopUpError("");
     setDepositId(null);
-    setTopUpPayAmount(null);
-    setTopUpExpiresAt(null);
+    setPayAmount(null);
+    setExpiresAt(null);
   };
 
-  const handleReceiptUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setTopUpReceiptName(e.target.files[0].name);
-      setTopUpReceiptFile(e.target.files[0]);
-      haptic("light");
-    }
-  };
-
-  const handleFinishTopUp = async () => {
+  const submitTopUp = async () => {
     const amount = parseInt(topUpAmount.replace(/[^\d]/g, ""), 10);
     if (!amount || amount <= 0) {
       haptic("medium");
-      alert("Iltimos, to'lov summasini kiriting!");
+      setTopUpStatus("error");
+      setTopUpError(t("enterAmount"));
       return;
     }
-    const initData = getInitData();
     setTopUpStatus("submitting");
     setTopUpError("");
     try {
       const form = new FormData();
-      form.append("initData", initData);
+      form.append("initData", getInitData());
       form.append("amount", String(amount));
-
       const res = await fetch("/api/deposit", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setTopUpStatus("error");
         setTopUpError(
           data.error === "INVALID_AMOUNT"
-            ? `Summa ${Number(data.minAmount).toLocaleString("uz-UZ")} dan ${Number(data.maxAmount).toLocaleString("uz-UZ")} so'mgacha bo'lishi kerak`
+            ? t("amountRange", { min: fmt(Number(data.minAmount)), max: fmt(Number(data.maxAmount)) })
             : data.error === "TOO_BUSY"
-            ? "Hozir band, birozdan keyin urinib ko'ring"
-            : `Xatolik: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`
+            ? t("tooBusy")
+            : `${t("errorPrefix")}: ${data.error ?? "HTTP " + res.status}${data.reason ? " (" + data.reason + ")" : ""}`
         );
         haptic("medium");
         return;
       }
       setDepositId(data.deposit.id);
-      setTopUpPayAmount(Number(data.deposit.pay_amount));
-      setTopUpExpiresAt(new Date(data.deposit.expires_at).getTime());
-      setTopUpNow(Date.now());
+      setPayAmount(Number(data.deposit.pay_amount));
+      setExpiresAt(new Date(data.deposit.expires_at).getTime());
+      setNow(Date.now());
       setTopUpStatus("pending");
       haptic("success");
     } catch (e) {
       setTopUpStatus("error");
-      setTopUpError(`Tarmoq xatosi: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-  
-
-// ===================== РЕФЕРАЛЬНАЯ СИСТЕМА =====================
-  const [referral, setReferral] = useState<{ invited: number; earned: number; available: number; percent: number } | null>(null);
-
-  const loadReferral = async () => {
-    try {
-      const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
-      const res = await fetch("/api/referral/state", {
-        headers: { "x-telegram-init-data": initData },
-      });
-      const data: any = await res.json();
-      if (res.ok && data.success) {
-        setReferral({
-          invited: data.invited,
-          earned: data.earned,
-          available: data.available,
-          percent: data.percent,
-        });
-      }
-    } catch {
-      // ничего не делаем
+      setTopUpError(`${t("networkErrorPrefix")}: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
+  // Пока заявка ждёт — раз в 3 сек спрашиваем сервер
   useEffect(() => {
-    loadReferral();
+    if (topUpStatus !== "pending" || !depositId) return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/deposit?initData=${encodeURIComponent(getInitData())}&id=${depositId}`);
+        const data = await res.json();
+        const st = data?.deposit?.status;
+        if (res.ok && st && st !== "pending") {
+          setTopUpStatus(st === "approved" ? "approved" : "rejected");
+          if (st === "approved") {
+            haptic("success");
+            loadBalance();
+          }
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topUpStatus, depositId]);
 
-    try {
-      const sp = new URLSearchParams(getInitData()).get("start_param") || "";
-      // Регистрация реферала при первом входе по ссылке
-      if (sp.startsWith("ref_")) {
-        fetch("/api/referral/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData: getInitData() || (window.Telegram?.WebApp?.initData ?? "") }),
-        }).catch(() => {});
-      }
-    } catch {
-      // ничего не делаем
-    }
-  }, []);
-
-  // Автообновление данных рефералки при открытии профиля или магазина
-  useEffect(() => {
-    if (activeView === "profile" || isShopOpen) loadReferral();
-  }, [activeView, isShopOpen]);
-
-  // Кнопка шеринга реферальной ссылки
-  const handleReferralInvite = () => {
-    if (!u?.id) return;
-    haptic("light");
-    const link = `https://t.me/bitta_hub_bot?startapp=ref_${u.id}`;
-    const text = "Bitta: o'yin valyutalari qulay narxda! Mening havolam orqali kiring:";
-    openTelegramLink(
-      `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
-    );
-  };
-  
-
-  // Таймер обратного отсчёта на экране оплаты
+  // Таймер обратного отсчёта
   useEffect(() => {
     if (topUpStatus !== "pending") return;
-    const t = setInterval(() => setTopUpNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [topUpStatus]);
 
-  const topUpSecondsLeft = topUpExpiresAt
-    ? Math.max(0, Math.floor((topUpExpiresAt - topUpNow) / 1000))
-    : 0;
-  const topUpTimeLabel = `${String(Math.floor(topUpSecondsLeft / 60)).padStart(2, "0")}:${String(topUpSecondsLeft % 60).padStart(2, "0")}`;
+  const secondsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - now) / 1000)) : 0;
+  const timeLabel = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`;
+  const expired = topUpStatus === "pending" && secondsLeft === 0;
 
-  // МАГАЗИН
-const handleOpenShop = (type: ShopType) => {
+  const copy = async (text: string, set: (v: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {}
     haptic("light");
-    setActiveShopType(type);
-    setActiveTab('UC'); // <--- Автоматически открывает вкладку UC при входе
+    set(true);
+    setTimeout(() => set(false), 1500);
+  };
+
+  // ===================== МАГАЗИН =====================
+
+  const openShop = (type: ShopType) => {
+    haptic("light");
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setShopType(type);
+    setTab("UC");
     setShopStep(1);
-    setSelectedPack(null);
-    setUserCredential("");
-    setBuyError("");
-    setIsBuying(false);
-    setIsShopOpen(true);
+    setPack(null);
+    setPlayerId("");
+    setZoneId("");
+    setBuyError(null);
+    setBuying(false);
   };
 
-  const handleSelectPack = (pack: { name: string; price: string }) => {
-    haptic("light");
-    setSelectedPack(pack);
-    setBuyError("");
-    setShopStep(2);
-  };
+  function closeShop() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setShopType(null);
+    setShopStep(1);
+    setPack(null);
+    setBuyError(null);
+  }
 
-const handleBuy = async () => {
-    if (!userCredential.trim()) {
+  const hasCoupon = !!referral && referral.available > 0;
+  const finalPrice = (p: number) => (hasCoupon ? Math.round((p * (100 - referral!.percent)) / 100) : p);
+
+  const buy = async () => {
+    if (!playerId.trim()) {
       haptic("medium");
-      setBuyError("Iltimos, ID kiriting");
+      setBuyError({ text: t("enterId"), noBalance: false });
       return;
     }
-    if (!activeShopType || !selectedPack) return;
+    if (!shopType || !pack || buying) return;
 
-    setIsBuying(true);
-    setBuyError("");
+    setBuying(true);
+    setBuyError(null);
     try {
-      const initData = getInitData() || (window.Telegram?.WebApp?.initData ?? "");
-
       const res = await fetch("/api/buy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          initData: initData,
-          service: activeShopType,
-          productName: selectedPack.name,
-          targetId: userCredential.trim(),
-          price: parseInt(selectedPack.price.replace(/[^\d]/g, ""), 10),
-          playerId: userCredential,
-          serverId: serverId,
+          initData: getInitData(),
+          service: shopType,
+          productName: pack.name,
+          targetId: playerId.trim(),
+          price: pack.price, // сервер всё равно берёт цену из своего прайса
+          playerId: playerId.trim(),
+          serverId: shopType === "mlbb" ? zoneId.trim() : "",
         }),
       });
-
-      const data: any = await res.json();
+      const data: any = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success) {
-        const details = data.details ? JSON.stringify(data.details) : "";
-        const errorMessage = `${data.error || "XATOLIK"}${details ? " - " + details : ""}`;
-        
-        setBuyError(errorMessage);
         haptic("medium");
+        const raw = String(data.error || "");
+        if (raw === "Balansingiz yetarli emas.") {
+          setBuyError({ text: t("errNoBalance"), noBalance: true });
+        } else if (raw.startsWith("Xatolik yuz berdi")) {
+          setBuyError({ text: t("errGeneric"), noBalance: false });
+        } else {
+          const details = data.details ? " — " + JSON.stringify(data.details) : "";
+          setBuyError({ text: (raw || t("errGeneric")) + details, noBalance: false });
+        }
         return;
       }
 
       haptic("success");
       setShopStep(4);
       loadBalance();
-      setTimeout(() => {
-        setIsShopOpen(false);
-        setShopStep(1);
-        setActiveShopType(null);
-        setSelectedPack(null);
-        setUserCredential("");
-        setBuyError("");
-      }, 2200);
+      loadReferral();
+      closeTimer.current = setTimeout(closeShop, 2600);
     } catch {
-      setBuyError("Server bilan bog'lanib bo'lmadi.");
+      setBuyError({ text: t("errNetwork"), noBalance: false });
     } finally {
-      setIsBuying(false);
+      setBuying(false);
     }
   };
 
+  const shareReferral = () => {
+    if (!tgUser?.id) return;
+    haptic("light");
+    const link = `https://t.me/bitta_hub_bot?startapp=ref_${tgUser.id}`;
+    openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t("refShareText"))}`);
+  };
 
+  // ===================== ОТРИСОВКА =====================
 
+  const shop = shopType ? SHOPS[shopType] : null;
+  const accentStyle = shop ? ({ "--a": shop.accent, "--a2": shop.accent2 } as React.CSSProperties) : undefined;
 
+  const idLabel = (type: ShopType): string =>
+    ({ pubg: t("idPubg"), freefire: t("idFreefire"), bloodstrike: t("idBloodstrike"), premium: t("idPremium"), mlbb: t("idMlbb") }[type]);
 
+  const idPlaceholder = (type: ShopType): string =>
+    ({ pubg: "5123456789", freefire: "78291044", bloodstrike: "1234567890", premium: "@username", mlbb: "12345678" }[type]);
 
-  const telegramProfile = activeView === "profile" ? getTelegramProfile() : null;
+  const packTitle = (p: Pack) => (p.months ? `${p.months} ${t("months")}` : p.name);
 
-return (
-    <div style={styles.container}>
-      {/* 🚀 ЭКРАН ЗАГРУЗКИ (благодаря Portal он сам встанет поверх всего) */}
-            {/* <SplashScreen /> */}
+  const titles: Record<View, string> = {
+    home: "bitta",
+    wallet: t("navWallet"),
+    history: t("navHistory"),
+    profile: t("navProfile"),
+  };
 
-      {/* Основные глобальные стили и шрифты приложения */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  const navItems: { id: View; label: string; icon: React.ReactNode }[] = [
+    { id: "home", label: t("navHome"), icon: <Icon.Home /> },
+    { id: "wallet", label: t("navWallet"), icon: <Icon.Wallet /> },
+    { id: "history", label: t("navHistory"), icon: <Icon.History /> },
+    { id: "profile", label: t("navProfile"), icon: <Icon.User /> },
+  ];
 
-        * { box-sizing: border-box; }
-        body { margin: 0; background-color: #120A21; }
-        .bt-display { font-family: 'Fredoka', 'Plus Jakarta Sans', sans-serif; }
+  const faq = [
+    [t("faq1q"), t("faq1a")],
+    [t("faq2q"), t("faq2a")],
+    [t("faq3q"), t("faq3a")],
+    [t("faq4q"), t("faq4a")],
+  ];
 
-        @keyframes bt-float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-18px) rotate(6deg); }
-        }
-        @keyframes bt-pop {
-          0% { opacity: 0; transform: translateY(16px) scale(0.92); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes bt-sheetUp {
-          0% { transform: translateY(100%); }
-          70% { transform: translateY(-6px); }
-          100% { transform: translateY(0); }
-        }
-        @keyframes bt-fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes bt-shine {
-          0% { transform: translateX(-130%) skewX(-15deg); }
-          100% { transform: translateX(230%) skewX(-15deg); }
-        }
-        @keyframes bt-check { to { stroke-dashoffset: 0; } }
-        @keyframes bt-circlePop {
-          0% { transform: scale(0.4); opacity: 0; }
-          60% { transform: scale(1.12); opacity: 1; }
-          100% { transform: scale(1); }
-        }
+  return (
+    <div className="app">
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
-        .bt-check-path { stroke-dasharray: 46; stroke-dashoffset: 46; animation: bt-check .5s .15s cubic-bezier(.65,0,.35,1) forwards; }
-        .bt-blob { animation: bt-float 8s ease-in-out infinite; }
-
-        .bt-tile, .bt-row, .bt-primary-btn, .bt-pack-card, .bt-close-btn, .bt-copy-btn, .bt-secondary-btn, .bt-tab-btn, .bt-quick-btn {
-          transition: transform .16s cubic-bezier(.34,1.56,.64,1), box-shadow .16s ease, border-color .16s ease, background .16s ease;
-        }
-        .bt-tile:active, .bt-pack-card:active, .bt-primary-btn:active, .bt-secondary-btn:active, .bt-copy-btn:active, .bt-tab-btn:active, .bt-quick-btn:active { transform: scale(0.94); }
-        .bt-row:active { transform: scale(0.97); }
-        .bt-close-btn:active { transform: scale(0.8) rotate(90deg); }
-
-        .bt-tile:hover { transform: translateY(-4px) rotate(-1deg); }
-        .bt-row:hover { transform: translateX(3px); }
-        .bt-primary-btn { position: relative; overflow: hidden; }
-        .bt-primary-btn::after {
-          content: ''; position: absolute; top: 0; left: 0; width: 45%; height: 100%;
-          background: linear-gradient(120deg, transparent, rgba(255,255,255,.4), transparent);
-          transform: translateX(-130%) skewX(-15deg);
-        }
-        .bt-primary-btn:hover::after { animation: bt-shine 1s ease; }
-        .bt-search-input:focus { box-shadow: 0 0 0 3px rgba(184,139,255,.28); }
-        .bt-sheet { animation: bt-sheetUp .32s cubic-bezier(0, 0, 0.2, 1) forwards; }
-        .bt-backdrop { animation: bt-fadeIn .2s ease forwards; }
-      ` }} />
-
-      {/* ФОНОВЫЕ ПЯТНА */}
-      <div style={styles.bgLayer} aria-hidden="true">
-        <div className="bt-blob" style={{ ...styles.blob, width: 260, height: 260, top: -80, left: -60, background: themes.pink.grad }} />
-        <div className="bt-blob" style={{ ...styles.blob, width: 220, height: 220, top: 140, right: -90, background: themes.violet.grad, animationDelay: "1.5s" }} />
-        <div className="bt-blob" style={{ ...styles.blob, width: 200, height: 200, bottom: 40, left: -70, background: themes.teal.grad, animationDelay: "3s" }} />
+      <div className="bg" aria-hidden="true">
+        <i className="blob b1" />
+        <i className="blob b2" />
+        <i className="blob b3" />
       </div>
 
-      <div style={styles.content}>
-{/* ХЕДЕР */}
-<header style={styles.header}>
-  {activeView === "home" ? (
-    <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("profile"); }}>
-      <Icons.User />
-    </button>
-  ) : (
-    <button style={styles.iconNavBtn} className="bt-secondary-btn" onClick={() => { haptic("light"); setActiveView("home"); }}>
-      <Icons.ChevronLeft />
-    </button>
-  )}
-
-<div style={styles.logoWrap}>
-    <span className="bt-blob" style={{ ...styles.logoDot, background: themes.pink.grad }}>
-      <Icons.Sparkle />
-    </span>
-    <span style={{
-      fontFamily: "'Plus Jakarta Sans', sans-serif",
-      fontWeight: 800,
-      fontSize: '20px',
-      letterSpacing: '-0.5px',
-      color: '#FFFFFF'
-    }}>
-      {activeView === "home" && "bitta"}
-      {activeView === "market" && "O'yin & Market"}
-      {activeView === "wallet" && "Hamyon"}
-      {activeView === "history" && "Tarix"}
-      {activeView === "profile" && "Profil"}
-    </span>
-  </div>
-
-  <div style={{ flex: 1 }} />
-
-  {/* КЛИК НА БАЛАНС ОТКРЫВАЕТ МОДАЛКУ ПОПОЛНЕНИЯ */}
-  <button style={styles.topUpHeaderBtn} className="bt-primary-btn" onClick={handleOpenTopUp}>
-    <Icons.Wallet />
-    <span>{userBalance.toLocaleString("uz-UZ")} UZS</span>
-  </button>
-
-  <button style={styles.burgerButton} className="bt-secondary-btn" onClick={() => { haptic("light"); setIsMenuOpen(true); }}>
-    <div style={styles.burgerLine}></div>
-    <div style={{ ...styles.burgerLine, width: "16px" }}></div>
-  </button>
-</header>
-
-
-
-{/* ===================== 1. ГЛАВНАЯ ===================== */}
-{activeView === "home" && (
-  <>
-    {/* HERO / KATALOG */}
-    <section style={{ ...styles.hero, paddingBottom: '4px', paddingTop: '8px' }}>
-      <div style={{
-        ...styles.heroBadge,
-        background: 'rgba(184, 139, 255, 0.12)',
-        border: '1px solid rgba(184, 139, 255, 0.25)',
-        color: '#D1B3FF',
-        fontSize: '11px',
-        fontWeight: '600',
-        padding: '4px 10px',
-        borderRadius: '20px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '5px'
-      }}>
-        <Icons.Sparkle /> Bitta ilovada — hammasi
-      </div>
-
-      {/* 🚀 НАШ БАННЕР ВСТАЕТ СЮДА */}
-      
-
-      <h1 style={{ 
-        fontFamily: "'Plus Jakarta Sans', sans-serif", 
-        fontSize: '24px', 
-        fontWeight: '800', 
-        letterSpacing: '-0.5px',
-        color: '#FFFFFF',
-        marginTop: '16px', 
-        marginBottom: '0' 
-      }}>
-        Katalog
-      </h1>
-    </section>
-{/* ВИТРИНА ИГР И СЕРВИСОВ (Чистая сетка 3 колонки без внешних CSS) */}
-    <div style={{ padding: '0 10px', marginTop: '16px', marginBottom: '24px' }}>
-      <div style={{ 
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
-        fontSize: '14px', 
-        fontWeight: '700', 
-        color: '#FFFFFF', 
-        marginBottom: '10px',
-        paddingLeft: '2px'
-      }}>
-        O'yinlar va Xizmatlar
-      </div>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '8px',
-        width: '100%'
-      }}>
-        {[
-          { id: "pubg", title: "PUBG Mobile", img: "/pubg_mobile.jpg" },
-          { id: "freefire", title: "Free Fire", img: "/ff_diamonds.jpg" },
-          { id: "premium", title: "Telegram Premium", img: "/telegram_premium.jpg" },
-          { id: "mlbb", title: "Mobile Legends", img: "/mobile_legends.jpg" },
-          { id: "bloodstrike", title: "Blood Strike", img: "/bloodstrike.jpg" },
-        ].map((item) => (
-          <button 
-            key={item.id}
-            onClick={() => {
-              haptic("light");
-              handleOpenShop(item.id as any);
-            }}
-            style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '12px',
-              padding: '4px 4px 6px 4px', /* Минимальный padding: картинка почти вплотную к краю */
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              cursor: 'pointer',
-              textAlign: 'center',
-              width: '100%',
-              boxSizing: 'border-box'
-            }}
-          >
-            <img 
-              src={item.img} 
-              alt={item.title} 
-              style={{ 
-                width: '100%', 
-                aspectRatio: '1/1', 
-                objectFit: 'cover', 
-                borderRadius: '9px',
-                marginBottom: '4px' 
-              }} 
-            />
-            <span style={{ 
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-              fontSize: '11px', 
-              fontWeight: '700', 
-              color: '#FFFFFF', 
-              lineHeight: '1.15',
-              letterSpacing: '-0.1px',
-              wordBreak: 'break-word'
-            }}>
-              {item.title}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-
-{/* РЕКЛАМА */}
-    <section style={{ marginBottom: "20px", padding: "0 16px" }}>
-      <div 
-        className="bt-tile" 
-        onClick={() => openTelegramLink("https://t.me/bitta_mngr")}
-        style={{
-          background: "rgba(255, 255, 255, 0.05)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
-          borderRadius: "16px",
-          padding: "16px",
-          cursor: "pointer"
-        }}
-      >
-        <div style={{ fontSize: "12px", color: "#38ef7d", fontWeight: "600", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-          <Icons.Sparkle /> Reklama xizmati
+      {/* ---------- ХЕДЕР ---------- */}
+      <header className="header">
+        <div className="brand">
+          <span className="brand-dot"><Icon.Sparkle /></span>
+          <span className="brand-name">{titles[view]}</span>
         </div>
-        <div style={{ fontSize: "15px", fontWeight: "700", color: "#FFF", marginBottom: "4px" }}>
-          Bitta-da o'z brendingizni e'lon qiling!
-        </div>
-        <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", marginBottom: "10px" }}>
-          Kanal, bot yoki xizmatlarni minglab faol foydalanuvchilarga ko'rsating.
-        </div>
-        <span style={{ fontSize: "13px", color: "#0088cc", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
-          Murojaat qilish (@bitta_mngr) <Icons.ChevronRight />
-        </span>
+        <button className="balance-pill press" onClick={openTopUp}>
+          <Icon.Wallet size={16} />
+          <span>{fmt(balance)} UZS</span>
+          <span className="plus">+</span>
+        </button>
+      </header>
 
-      </div>
-    </section>
-  </>
-)}
-{/* ===================== 2. КОШЕЛЁК (HAMYON) ===================== */}
-{activeView === "wallet" && (
-  <WalletView 
-    balance={userBalance} 
-    onOpenDeposit={handleOpenTopUp} 
-  />
-)}
+      <main className="content">
+        {/* ---------- ГЛАВНАЯ ---------- */}
+        {view === "home" && (
+          <>
+            <section className="hero">
+              <span className="chip"><Icon.Sparkle /> {t("heroBadge")}</span>
+              <h1>{t("heroTitle")}</h1>
+              <p>{t("heroSub")}</p>
+            </section>
 
-
-
-
-
-
-        {/* ===================== PROFIL ===================== */}
-        {activeView === "profile" && (
-          <div style={styles.profileWrap}>
-            <div style={styles.profileCard}>
-              {telegramProfile?.photoUrl ? (
-                <img src={telegramProfile.photoUrl} alt="" style={styles.profileAvatarImg} />
-              ) : (
-                <div style={styles.profileAvatarFallback}><Icons.User /></div>
-              )}
-              <div style={styles.profileName}>
-                {telegramProfile?.firstName || "Foydalanuvchi"} {telegramProfile?.lastName || ""}
-              </div>
-              {telegramProfile?.username && <div style={styles.profileUsername}>@{telegramProfile.username}</div>}
-            </div>
-
-            <div style={styles.menuBalanceCard}>
-              <div style={{ fontSize: "12px", color: "#A79FC2" }}>Hisobingiz:</div>
-              <div style={{ fontSize: "22px", fontWeight: 700, color: "#3DDC97", margin: "2px 0 10px 0" }}>
-                {userBalance.toLocaleString("uz-UZ")} UZS
-              </div>
-              <button style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }} className="bt-primary-btn" onClick={handleOpenTopUp}>
-                <Icons.Wallet /> Balansni to'ldirish
-              </button>
-            </div>
-
-            <div style={{ ...styles.menuBalanceCard, marginTop: "12px" }}>
-  <div style={{ fontSize: "15px", fontWeight: 700, color: "#FFFFFF" }}>🎁 Do'stlarni taklif qiling</div>
-  <div style={{ fontSize: "12px", color: "#A79FC2", margin: "6px 0 12px 0", lineHeight: 1.5 }}>
-    Do'stingiz biror paket sotib olsa, har biri uchun keyingi xaridingizga −2% kupon olasiz.
-  </div>
-  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-    {[
-      { label: "Taklif qilingan", value: referral?.invited ?? 0 },
-      { label: "Xarid qilgan", value: referral?.earned ?? 0 },
-      { label: "Kuponlar", value: referral?.available ?? 0 },
-    ].map((item) => (
-      <div
-        key={item.label}
-        style={{
-          flex: 1,
-          background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: "12px",
-          padding: "8px 4px",
-          textAlign: "center",
-        }}
-      >
-        <div style={{ fontSize: "18px", fontWeight: 700, color: "#FFFFFF" }}>{item.value}</div>
-        <div style={{ fontSize: "10px", color: "#A79FC2", marginTop: "2px" }}>{item.label}</div>
-      </div>
-    ))}
-  </div>
-  <button
-    style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%" }}
-    className="bt-primary-btn"
-    onClick={handleReferralInvite}
-  >
-    Do'stlarni taklif qilish
-  </button>
-</div>
-
-            <div style={styles.profileSectionLabel}>Til</div>
-            <div style={styles.langRow}>
-              <button style={{ ...styles.langPill, ...(uiLanguage === "uz" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("uz")}>O'zbekcha</button>
-              <button style={{ ...styles.langPill, ...(uiLanguage === "ru" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("ru")}>Русский</button>
-              <button style={{ ...styles.langPill, ...(uiLanguage === "en" ? styles.langPillActive : {}) }} onClick={() => setUiLanguage("en")}>Qaraqalpaq</button>
-            </div>
-            <p style={{ fontSize: "11px", color: "#7E7694", margin: "6px 0 20px 0" }}>Boshqa tillar tez orada qo'shiladi.</p>
-
-            <div style={styles.profileSectionLabel}>Yordam</div>
-            <div style={styles.menuList}>
-              <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
-                <Icons.Headphones /> Qo'llab-quvvatlash (@bitta_mngr)
-              </button>
-              <button style={styles.menuItem} onClick={() => openTelegramLink("https://t.me/bitta_hub")}>
-                <Icons.Megaphone /> Rasmiy kanal 
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {activeView === "history" && (
-  <HistoryView telegramId={u?.id || 0} />
-)}
-
-{/* ===================== ПОЛНОЭКРАННОЕ ОКНО: BALANS TO'LDIRISH ===================== */}
-{isTopUpOpen && (
-  <div
-    style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: '65px',
-      background: '#0d0f17',
-      zIndex: 99,
-      overflowY: 'auto',
-      display: 'flex',
-      flexDirection: 'column'
-    }}
-  >
-    {/* ВЕРХНЯЯ ПАНЕЛЬ */}
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '16px',
-      position: 'sticky',
-      top: 0,
-      background: '#0d0f17',
-      zIndex: 10,
-      borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-    }}>
-      <button
-        onClick={() => {
-          haptic("light");
-          setIsTopUpOpen(false);
-        }}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: '#FFF',
-          fontSize: '16px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px'
-        }}
-      >
-        ‹ Orqaga
-      </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: '#a855f7', display: 'flex', alignItems: 'center' }}><Icons.Wallet /></span>
-        <span style={{ fontSize: '15px', fontWeight: '700', color: '#FFF' }}>
-          Balans to'ldirish
-        </span>
-      </div>
-
-      <div>
-        {(topUpStatus === "idle" || topUpStatus === "error" || topUpStatus === "approved" || topUpStatus === "rejected" || topUpStatus === "expired") ? (
-          <button
-            style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex' }}
-            onClick={() => setIsTopUpOpen(false)}
-          >
-            <Icons.Close />
-          </button>
-        ) : (
-          <div style={{ width: '24px' }}></div>
-        )}
-      </div>
-    </div>
-
-    {/* КОНТЕНТ */}
-    <div style={{ padding: '16px', flex: 1 }}>
-      {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") ? (
-        <div>
-          {/* ВВОД СУММЫ */}
-          <div>
-            <label style={styles.inputLabel}>To'lov summasi (UZS):</label>
-            <input
-              type="number"
-              placeholder="Masalan: 50000"
-              value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
-              style={styles.input}
-              className="bt-search-input"
-            />
-            <div style={styles.quickAmountRow}>
-              {["10000", "25000", "50000", "100000"].map((amt) => (
-                <button
-                  key={amt}
-                  style={styles.quickAmountBtn}
-                  className="bt-quick-btn"
-                  onClick={() => {
-                    setTopUpAmount(amt);
-                    haptic("light");
-                  }}
-                >
-                  +{parseInt(amt).toLocaleString("uz-UZ")}
+            <h2 className="section-title">{t("gamesTitle")}</h2>
+            <div className="games">
+              {SHOP_ORDER.map((id) => (
+                <button key={id} className="game press" onClick={() => openShop(id)} style={{ "--a": SHOPS[id].accent } as React.CSSProperties}>
+                  <img src={SHOPS[id].logo} alt={SHOPS[id].title} />
+                  <span>{SHOPS[id].title}</span>
                 </button>
               ))}
             </div>
-          </div>
 
-          <p style={{ color: "#9aa0b4", fontSize: "12px", marginTop: "14px", lineHeight: 1.5 }}>
-            Keyingi qadamda karta raqami va o'tkazish uchun aniq summa ko'rsatiladi. Pul tushishi bilan balans avtomatik to'ldiriladi.
-          </p>
-
-          {topUpStatus === "error" && (
-            <p style={{ color: "#FF9DAF", fontSize: "12px", marginTop: "10px" }}>{topUpError}</p>
-          )}
-
-          <button
-            style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "24px", opacity: topUpStatus === "submitting" ? 0.7 : 1 }}
-            className="bt-primary-btn"
-            onClick={handleFinishTopUp}
-            disabled={topUpStatus === "submitting"}
-          >
-            {topUpStatus === "submitting" ? "Yuborilmoqda..." : <><Icons.Rocket /> Davom etish</>}
-          </button>
-        </div>
-      ) : topUpStatus === "pending" ? (
-        topUpSecondsLeft > 0 ? (
-          <div>
-            {/* КАРТА */}
-            <div style={styles.paymentCard}>
-              <p style={styles.paymentText}>
-                Quyidagi kartaga <b>aniq shu summani</b> o'tkazing:
-              </p>
-              <div style={styles.cardBox}>
-                <span style={styles.cardNumber}>9860 1966 1961 4445</span>
-                <button
-                  style={styles.copyBtn}
-                  className="bt-copy-btn"
-                  onClick={() => {
-                    navigator.clipboard.writeText("9860196619614445");
-                    haptic("light");
-                    setTopUpCopied(true);
-                    setTimeout(() => setTopUpCopied(false), 1500);
-                  }}
-                >
-                  {topUpCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
-                </button>
-              </div>
-              <div style={styles.cardHolder}>Karta egasi: MUSA X.</div>
-            </div>
-
-            {/* ТОЧНАЯ СУММА */}
-            <div style={{ marginTop: "16px" }}>
-              <label style={styles.inputLabel}>O'tkazish summasi (UZS):</label>
-              <div style={styles.cardBox}>
-                <span style={styles.cardNumber}>
-                  {topUpPayAmount !== null ? topUpPayAmount.toLocaleString("uz-UZ") : ""}
-                </span>
-                <button
-                  style={styles.copyBtn}
-                  className="bt-copy-btn"
-                  onClick={() => {
-                    if (topUpPayAmount !== null) {
-                      navigator.clipboard.writeText(String(topUpPayAmount));
-                    }
-                    haptic("light");
-                    setTopUpAmountCopied(true);
-                    setTimeout(() => setTopUpAmountCopied(false), 1500);
-                  }}
-                >
-                  {topUpAmountCopied ? <><Icons.CheckSmall /> Nusxalandi!</> : "Nusxa olish"}
-                </button>
-              </div>
-              <p style={{ color: "#FFD166", fontSize: "12px", marginTop: "8px", lineHeight: 1.5 }}>
-                Summani o'zgartirmang! Aynan shu summa bo'lishi kerak, aks holda to'lov avtomatik tanilmaydi.
-              </p>
-            </div>
-
-            {/* ТАЙМЕР */}
-            <div style={{ marginTop: "16px", textAlign: "center", color: "#FFF", fontSize: "15px", fontWeight: 700 }}>
-              ⏳ {topUpTimeLabel}
-            </div>
-            <div style={{ ...styles.successSub, textAlign: "center", marginTop: "8px" }}>
-              Pul tushgach balans avtomatik to'ldiriladi — bu oynani yopmasangiz ham bo'ladi.
-            </div>
-          </div>
-        ) : (
-          <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
-            <div style={{ color: "#FFD166", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
-              <Icons.Clock />
-            </div>
-            <div style={styles.successTitle}>Vaqt tugadi</div>
-            <div style={styles.successSub}>
-              Agar to'lov qilgan bo'lsangiz, bir necha daqiqa kuting yoki @bitta_mngr ga yozing. Aks holda qaytadan urinib ko'ring.
-            </div>
-            <button
-              style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
-              className="bt-primary-btn"
-              onClick={handleOpenTopUp}
-            >
-              Qayta urinish
+            <button className="promo press" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
+              <span className="promo-tag"><Icon.Sparkle /> {t("promoTag")}</span>
+              <strong>{t("promoTitle")}</strong>
+              <small>{t("promoText")}</small>
+              <span className="promo-cta">{t("promoCta")} <Icon.Chevron /></span>
             </button>
-          </div>
-        )
-      ) : topUpStatus === "approved" ? (
-        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
-          <div style={{ color: "#3DDC97", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
-            <Icons.Check />
-          </div>
-          <div style={styles.successTitle}>Balans to'ldirildi!</div>
-          <div style={styles.successSub}>
-            Joriy balansingiz: <strong style={{ color: "#3DDC97" }}>{userBalance.toLocaleString("uz-UZ")} UZS</strong>
-          </div>
-          <button
-            style={{ ...styles.btnPrimary, background: "#3DDC97", color: "#000", fontWeight: "700", width: "100%", marginTop: "20px" }}
-            className="bt-primary-btn"
-            onClick={() => setIsTopUpOpen(false)}
-          >
-            Tushunarli
-          </button>
-        </div>
-      ) : topUpStatus === "rejected" ? (
-        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
-          <div style={{ color: "#FF9DAF", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
-            <Icons.XCircle />
-          </div>
-          <div style={styles.successTitle}>So'rov rad etildi</div>
-          <div style={styles.successSub}>
-            To'lov tasdiqlanmadi. Agar bu xato bo'lsa, @bitta_mngr ga yozing yoki qaytadan urinib ko'ring.
-          </div>
-          <button
-            style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
-            className="bt-primary-btn"
-            onClick={handleOpenTopUp}
-          >
-            Qayta urinish
-          </button>
-        </div>
-      ) : (
-        <div style={{ ...styles.successBox, padding: '32px 16px', textAlign: 'center' }}>
-          <div style={{ color: "#FFD166", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
-            <Icons.Clock />
-          </div>
-          <div style={styles.successTitle}>Vaqt tugadi</div>
-          <div style={styles.successSub}>
-            Agar to'lov qilgan bo'lsangiz, @bitta_mngr ga yozing. Aks holda qaytadan urinib ko'ring.
-          </div>
-          <button
-            style={{ ...styles.btnPrimary, background: themes.violet.grad, width: "100%", marginTop: "20px" }}
-            className="bt-primary-btn"
-            onClick={handleOpenTopUp}
-          >
-            Qayta urinish
-          </button>
-        </div>
-      )}
-    </div>
-  </div>
-)}
-
-{/* ===================== ПОЛНОЭКРАННОЕ ОКНО МАГАЗИНА ===================== */}
-{isShopOpen && activeShopType && (
-  <div 
-    style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: '65px', // Отступ снизу, чтобы НЕ перекрывать ваше Нижнее Меню
-      background: '#0d0f17', // Тёмный фон приложения
-      zIndex: 99,
-      overflowY: 'auto',
-      display: 'flex',
-      flexDirection: 'column'
-    }}
-  >
-    {/* ВЕРХНЯЯ ПАНЕЛЬ С КНОПКОЙ «НАЗАД» */}
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '16px',
-      position: 'sticky',
-      top: 0,
-      background: '#0d0f17',
-      zIndex: 10,
-      borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-    }}>
-      <button 
-        onClick={() => {
-          haptic("light");
-          if (shopStep === 2) {
-            setShopStep(1);
-          } else {
-            setIsShopOpen(false);
-          }
-        }}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: '#FFF',
-          fontSize: '16px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px'
-        }}
-      >
-        ‹ Orqaga
-      </button>
-
-      {/* Аватарка и Название игры */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {gameLogos[activeShopType] ? (
-          <img 
-            src={gameLogos[activeShopType]} 
-            alt="Game Logo" 
-            style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} 
-          />
-        ) : (
-          (() => { const ShopIcon = shopIcons[activeShopType]; return <ShopIcon />; })()
+          </>
         )}
-        <span style={{ fontSize: '15px', fontWeight: '700', color: '#FFF' }}>
-          {shopProducts[activeShopType].title}
-        </span>
-      </div>
 
-      {/* Пустой блок для выравнивания заголовка по центру */}
-      <div style={{ width: '60px' }}></div>
-    </div>
+        {/* ---------- КОШЕЛЁК ---------- */}
+        {view === "wallet" && <WalletView balance={balance} onOpenDeposit={openTopUp} />}
 
-    {/* КОНТЕНТ СТРАНИЦЫ */}
-    <div style={{ padding: '16px', flex: 1 }}>
+        {/* ---------- ИСТОРИЯ ---------- */}
+        {view === "history" && <HistoryView telegramId={tgUser?.id || 0} />}
 
-{/* ШАГ 1: ВЫБОР ТАРИФА (СЕТКА ПАКЕТОВ) */}
-      {shopStep === 1 && activeShopType && (
-        <div>
-          <p style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '14px' }}>
-            Paketni tanlang
-          </p>
-
-          {/* ПЕРЕКЛЮЧАТЕЛЬ ВКАЛАДОК (UC / SHOP) - Показывается только у PUBG */}
-          {shopProducts[activeShopType]?.tabs && (
-            <div style={{
-              display: 'flex',
-              gap: '6px',
-              marginBottom: '16px',
-              background: 'rgba(255, 255, 255, 0.04)',
-              padding: '4px',
-              borderRadius: '14px',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              {shopProducts[activeShopType].tabs.map((tab: string) => {
-                const isActive = activeTab === tab;
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => {
-                      if (typeof haptic !== 'undefined') haptic("light");
-                      setActiveTab(tab as 'UC' | 'SHOP');
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      borderRadius: '10px',
-                      border: 'none',
-                      background: isActive ? '#8b5cf6' : 'transparent',
-                      color: isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)',
-                      fontFamily: "'Plus Jakarta Sans', sans-serif",
-                      fontSize: '13px',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <span>{tab === 'UC' ? '🟡' : '🎁'}</span>
-                    <span>{tab}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Сетка тарифов (по 2 в ряд) */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '10px'
-          }}>
-            {shopProducts[activeShopType].packs
-              .filter((pack: any) => {
-                // Если у игры есть табы (PUBG) — фильтруем по type, иначе показываем всё
-                if (!shopProducts[activeShopType]?.tabs) return true;
-                return pack.type === activeTab;
-              })
-              .map((pack: any, idx: number) => {
-                const packIcon = pack.icon || shopImages[activeShopType];
-
-                return (
-                  <button
-                    key={idx}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: '16px',
-                      padding: '14px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                    className="bt-pack-card"
-                    onClick={() => {
-                      if (typeof haptic !== 'undefined') haptic("light");
-                      handleSelectPack(pack);
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1.2' }}>
-                        {pack.name}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#a855f7', fontWeight: '600', marginTop: '6px' }}>
-                        {pack.price}
-                      </div>
-                    </div>
-
-                    {packIcon && (
-                      <img
-                        src={packIcon}
-                        alt="icon"
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          objectFit: 'contain',
-                          flexShrink: 0,
-                          transform: pack.scale ? `scale(${pack.scale})` : 'none'
-                        }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* ШАГ 2: ВВОД PLAYER ID И ОПЛАТА */}
-      {shopStep === 2 && selectedPack && (
-        <div>
-          {/* Сводка заказа */}
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '14px',
-            padding: '14px',
-            marginBottom: '16px',
-            fontSize: '13px',
-            color: 'rgba(255, 255, 255, 0.7)'
-          }}>
-            Tanlangan paket: <span style={{ color: "#FFF", fontWeight: 700 }}>{selectedPack.name}</span>
-            <div style={{ fontSize: '15px', color: '#a855f7', fontWeight: '700', marginTop: '4px' }}>
-              {selectedPack.price}
-            </div>
-
-            {/* ↓↓↓ ВСТАВКА КУПОНА ↓↓↓ */}
-            {referral && referral.available > 0 && (
-              <div style={{ fontSize: '12px', color: '#3DDC97', marginTop: '6px' }}>
-                🎟 Kupon −{referral.percent}% avtomatik qo'llanadi
+        {/* ---------- ПРОФИЛЬ ---------- */}
+        {view === "profile" && (
+          <div className="stack">
+            <div className="card profile-card">
+              {tgUser?.photo_url ? (
+                <img className="avatar" src={tgUser.photo_url} alt="" />
+              ) : (
+                <div className="avatar avatar-fallback"><Icon.User /></div>
+              )}
+              <div className="pname">
+                {tgUser?.first_name || t("user")} {tgUser?.last_name || ""}
               </div>
-            )}
-            {/* ↑↑↑ КОНЕЦ ВСТАВКИ ↑↑↑ */}
-          </div>
-          
-        {/* Ввод ID */}
-        {activeShopType === 'mlbb' ? (
-          /* Поля для Mobile Legends (Два инпута) */
-          <div style={{ marginBottom: '16px', display: 'flex', gap: '10px' }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                User ID
-              </p>
-              <input
-                type="text"
-                placeholder="12345678"
-                value={userCredential}
-                onChange={(e) => setUserCredential(e.target.value)}
-                style={styles.input}
-                className="bt-search-input"
-              />
+              {tgUser?.username && <div className="puser">@{tgUser.username}</div>}
             </div>
-            <div style={{ flex: '0 0 100px' }}>
-              <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-                Zone ID
-              </p>
-              <input
-                type="text"
-                placeholder="1234"
-                value={serverId} // Убедись, что у тебя есть useState для serverId, например: const [serverId, setServerId] = useState('');
-                onChange={(e) => setServerId(e.target.value)}
-                style={styles.input}
-                className="bt-search-input"
-              />
-            </div>
-          </div>
-        ) : (
-          /* Обычное одно поле для остальных игр (PUBG, Free Fire и т.д.) */
-          <div style={{ marginBottom: '16px' }}>
-            <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>
-              {shopProducts[activeShopType]?.placeholder || "Player ID kiriting"}
-            </p>
-            <input
-              type="text"
-              placeholder={shopProducts[activeShopType]?.placeholder || "12345678"}
-              value={userCredential}
-              onChange={(e) => setUserCredential(e.target.value)}
-              style={styles.input}
-              className="bt-search-input"
-            />
-          </div>
-        )}
 
-          {/* Ошибка */}
-          {buyError && (
-            <div style={{ color: "#FF9DAF", fontSize: "12px", display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
-              <span>{buyError}</span>
-              {buyError === "Balansingiz yetarli emas." && (
-                <button
-                  style={{ ...styles.btnPrimary, background: "linear-gradient(135deg,#B98BFF,#6E6BFF)" }}
-                  className="bt-primary-btn"
-                  onClick={() => { haptic("medium"); setIsShopOpen(false); handleOpenTopUp(); }}
-                >
-                  <Icons.Wallet /> Hisobni to'ldirish
+            <div className="card">
+              <div className="muted">{t("yourBalance")}</div>
+              <div className="big-balance">{fmt(balance)} UZS</div>
+              <button className="btn btn-primary press" onClick={openTopUp}>
+                <Icon.Wallet size={18} /> {t("topUpAccount")}
+              </button>
+            </div>
+
+            <div className="card">
+              <div className="card-title"><Icon.Gift /> {t("refTitle")}</div>
+              <p className="muted small">{t("refText", { p: referral?.percent ?? 2 })}</p>
+              <div className="stats">
+                {[
+                  [t("refInvited"), referral?.invited ?? 0],
+                  [t("refBought"), referral?.earned ?? 0],
+                  [t("refCoupons"), referral?.available ?? 0],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="stat">
+                    <b>{value}</b>
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+              <button className="btn btn-primary press" onClick={shareReferral}>{t("refButton")}</button>
+            </div>
+
+            <div className="label">{t("language")}</div>
+            <div className="seg">
+              <button className={lang === "uz" ? "on" : ""} onClick={() => chooseLang("uz")}>O'zbekcha</button>
+              <button className={lang === "ru" ? "on" : ""} onClick={() => chooseLang("ru")}>Русский</button>
+              <button disabled title="soon">Qaraqalpaq</button>
+            </div>
+            <p className="muted tiny">{t("langSoon")}</p>
+
+            <div className="label">{t("help")}</div>
+            <div className="card list">
+              <button className="list-item press" onClick={() => openTelegramLink("https://t.me/bitta_mngr")}>
+                <Icon.Headphones /> <span>{t("support")}</span> <Icon.Chevron />
+              </button>
+              <button className="list-item press" onClick={() => openTelegramLink("https://t.me/bitta_hub")}>
+                <Icon.Megaphone /> <span>{t("channel")}</span> <Icon.Chevron />
+              </button>
+              {isAdmin && (
+                <button className="list-item press" onClick={() => router.push("/admin")}>
+                  <Icon.Sparkle /> <span>Admin</span> <Icon.Chevron />
                 </button>
               )}
+              <button className="list-item press" onClick={() => setFaqOpen(true)}>
+                <Icon.Sparkle /> <span>{t("faq")}</span> <Icon.Chevron />
+              </button>
+              <button className="list-item press" onClick={() => setTermsOpen(true)}>
+                <Icon.Sparkle /> <span>{t("terms")}</span> <Icon.Chevron />
+              </button>
             </div>
-          )}
+            <p className="copyright">{t("copyright")}</p>
+          </div>
+        )}
+      </main>
 
-          {/* Кнопка Покупки */}
+      {/* ---------- НИЖНЕЕ МЕНЮ ---------- */}
+      <nav className="nav">
+        {navItems.map((n) => (
           <button
-            style={{ 
-              ...styles.btnPrimary, 
-              width: '100%',
-              padding: '14px',
-              background: shopTheme[activeShopType]?.grad || "linear-gradient(135deg,#B98BFF,#6E6BFF)", 
-              opacity: isBuying ? 0.7 : 1 
+            key={n.id}
+            className={`nav-item ${view === n.id ? "active" : ""}`}
+            onClick={() => {
+              haptic("light");
+              setView(n.id);
             }}
-            className="bt-primary-btn"
-            onClick={() => { haptic("medium"); handleBuy(); }}
-            disabled={isBuying}
           >
-            {isBuying ? "Yuborilmoqda..." : "Sotib olish"}
+            {n.icon}
+            <span>{n.label}</span>
           </button>
+        ))}
+      </nav>
+
+      {/* ---------- МАГАЗИН (на весь экран) ---------- */}
+      {shop && shopType && (
+        <div className="sheet" style={accentStyle}>
+          <div className="sheet-top">
+            <button className="icon-btn press" onClick={handleBack} aria-label={t("back")}><Icon.Back /></button>
+            <div className="sheet-title">
+              <img src={shop.logo} alt="" />
+              <span>{shop.title}</span>
+            </div>
+            <span style={{ width: 40 }} />
+          </div>
+
+          <div className="sheet-body">
+            {/* ШАГ 1 — выбор пакета */}
+            {shopStep === 1 && (
+              <>
+                <p className="label first">{t("choosePack")}</p>
+
+                {shop.hasTabs && (
+                  <div className="seg tabs">
+                    {(["UC", "SHOP"] as const).map((k) => (
+                      <button key={k} className={tab === k ? "on" : ""} onClick={() => { haptic("light"); setTab(k); }}>
+                        {k === "UC" ? t("tabUC") : t("tabShop")}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="packs">
+                  {shop.packs
+                    .filter((p) => !shop.hasTabs || p.tab === tab)
+                    .map((p) => (
+                      <button
+                        key={p.name}
+                        className="pack press"
+                        onClick={() => {
+                          haptic("light");
+                          setPack(p);
+                          setBuyError(null);
+                          setShopStep(2);
+                        }}
+                      >
+                        <div className="pack-text">
+                          <b>{packTitle(p)}</b>
+                          <span>{fmt(p.price)} UZS</span>
+                        </div>
+                        <img
+                          src={p.icon || shop.packIcon}
+                          alt=""
+                          style={p.scale ? { transform: `scale(${p.scale})` } : undefined}
+                        />
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
+
+            {/* ШАГ 2 — ID и оплата */}
+            {shopStep === 2 && pack && (
+              <>
+                <div className="card summary">
+                  <img src={pack.icon || shop.packIcon} alt="" />
+                  <div>
+                    <div className="muted small">{t("selectedPack")}</div>
+                    <b>{packTitle(pack)}</b>
+                  </div>
+                  <div className="price">
+                    {hasCoupon && <s>{fmt(pack.price)}</s>}
+                    <b>{fmt(finalPrice(pack.price))} UZS</b>
+                  </div>
+                </div>
+
+                {hasCoupon && (
+                  <div className="coupon"><Icon.Gift /> {t("couponApplied", { p: referral!.percent })}</div>
+                )}
+
+                <div className="fields">
+                  <div className="field grow">
+                    <label>{idLabel(shopType)}</label>
+                    <input
+                      type="text"
+                      inputMode={shopType === "premium" ? "text" : "numeric"}
+                      placeholder={idPlaceholder(shopType)}
+                      value={playerId}
+                      onChange={(e) => setPlayerId(e.target.value)}
+                    />
+                  </div>
+                  {shopType === "mlbb" && (
+                    <div className="field zone">
+                      <label>{t("zoneId")}</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="1234"
+                        value={zoneId}
+                        onChange={(e) => setZoneId(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <p className="muted tiny">{shopType === "premium" ? t("idHintPremium") : t("idHintDefault")}</p>
+
+                {buyError && (
+                  <div className="error">
+                    <span>{buyError.text}</span>
+                    {buyError.noBalance && (
+                      <button
+                        className="btn btn-primary press"
+                        onClick={() => {
+                          haptic("medium");
+                          closeShop();
+                          openTopUp();
+                        }}
+                      >
+                        <Icon.Wallet size={18} /> {t("topUpAccount")}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <button className="btn btn-accent press" disabled={buying} onClick={() => { haptic("medium"); buy(); }}>
+                  {buying ? t("sending") : `${t("buy")} · ${fmt(finalPrice(pack.price))} UZS`}
+                </button>
+              </>
+            )}
+
+            {/* ШАГ 4 — готово */}
+            {shopStep === 4 && (
+              <div className="result ok">
+                <Icon.BigCheck />
+                <h3>{t("orderAccepted")}</h3>
+                <p>{t("orderAcceptedSub")}</p>
+                <button className="btn btn-green press" onClick={closeShop}>{t("ok")}</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ШАГ 4: УСПЕШНЫЙ ЗАКАЗ */}
-      {shopStep === 4 && (
-        <div style={{ padding: '32px 16px', textAlign: 'center' }}>
-          <div style={{ color: "#3DDC97", marginBottom: "12px", display: 'flex', justifyContent: 'center' }}>
-            <Icons.Check />
+      {/* ---------- ПОПОЛНЕНИЕ (на весь экран, поверх магазина) ---------- */}
+      {topUpOpen && (
+        <div className="sheet top">
+          <div className="sheet-top">
+            <button className="icon-btn press" onClick={() => setTopUpOpen(false)} aria-label={t("back")}><Icon.Back /></button>
+            <div className="sheet-title">
+              <Icon.Wallet size={20} />
+              <span>{t("topUpTitle")}</span>
+            </div>
+            <span style={{ width: 40 }} />
           </div>
-          <div style={styles.successTitle}>Buyurtma qabul qilindi!</div>
-          <div style={{ ...styles.successSub, marginBottom: '20px' }}>
-            Tez orada buyurtmangiz bajariladi va sizga xabar beriladi.
+
+          <div className="sheet-body">
+            {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
+              <>
+                <div className="field">
+                  <label>{t("topUpAmountLabel")}</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={t("topUpPlaceholder")}
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                  />
+                </div>
+                <div className="quick">
+                  {["10000", "25000", "50000", "100000"].map((a) => (
+                    <button key={a} className="press" onClick={() => { haptic("light"); setTopUpAmount(a); }}>
+                      +{fmt(Number(a))}
+                    </button>
+                  ))}
+                </div>
+                <p className="muted small">{t("topUpInfo")}</p>
+                {topUpStatus === "error" && <div className="error"><span>{topUpError}</span></div>}
+                <button className="btn btn-primary press" disabled={topUpStatus === "submitting"} onClick={submitTopUp}>
+                  {topUpStatus === "submitting" ? t("sending") : t("next")}
+                </button>
+              </>
+            )}
+
+            {topUpStatus === "pending" && !expired && (
+              <>
+                <div className="card">
+                  <p className="small">{t("payToCard")}</p>
+                  <div className="copy-box">
+                    <span>{CARD_NUMBER_VIEW}</span>
+                    <button className="press" onClick={() => copy(CARD_NUMBER, setCopiedCard)}>
+                      {copiedCard ? <><Icon.Check /> {t("copied")}</> : t("copy")}
+                    </button>
+                  </div>
+                  <div className="muted small">{t("cardOwner")}: {CARD_OWNER}</div>
+                </div>
+
+                <div className="field" style={{ marginTop: 14 }}>
+                  <label>{t("transferAmount")}</label>
+                  <div className="copy-box">
+                    <span>{payAmount !== null ? fmt(payAmount) : ""}</span>
+                    <button className="press" onClick={() => payAmount !== null && copy(String(payAmount), setCopiedSum)}>
+                      {copiedSum ? <><Icon.Check /> {t("copied")}</> : t("copy")}
+                    </button>
+                  </div>
+                </div>
+                <p className="warn">{t("dontChangeAmount")}</p>
+
+                <div className="timer">{timeLabel}</div>
+                <p className="muted small center">{t("autoCredit")}</p>
+              </>
+            )}
+
+            {expired && (
+              <div className="result warn-c">
+                <Icon.BigClock />
+                <h3>{t("timeUp")}</h3>
+                <p>{t("timeUpSub")}</p>
+                <button className="btn btn-primary press" onClick={openTopUp}>{t("retry")}</button>
+              </div>
+            )}
+
+            {topUpStatus === "approved" && (
+              <div className="result ok">
+                <Icon.BigCheck />
+                <h3>{t("topUpDone")}</h3>
+                <p>{t("currentBalance")}: <b className="green">{fmt(balance)} UZS</b></p>
+                <button className="btn btn-green press" onClick={() => setTopUpOpen(false)}>{t("ok")}</button>
+              </div>
+            )}
+
+            {topUpStatus === "rejected" && (
+              <div className="result bad">
+                <Icon.BigX />
+                <h3>{t("rejected")}</h3>
+                <p>{t("rejectedSub")}</p>
+                <button className="btn btn-primary press" onClick={openTopUp}>{t("retry")}</button>
+              </div>
+            )}
           </div>
-          
-          <button
-            style={{ ...styles.btnPrimary, background: "#3DDC97", color: "#000", fontWeight: "700", width: "100%" }}
-            className="bt-primary-btn"
-            onClick={() => { haptic("light"); setIsShopOpen(false); }}
-          >
-            Tushunarli
-          </button>
         </div>
       )}
-    </div>
-  </div>
-)}
 
-
-      {/* ===================== FOOTER (ПОДВАЛ) ===================== */}
-<footer style={{
-  marginTop: '28px',
-  paddingBottom: '80px', // Запас снизу, чтобы плавающая кнопка BITTA AI не перекрывала текст!
-  textAlign: 'center',
-  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-  paddingTop: '16px'
-}}>
-  {/* Навигация мелким текстом */}
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center', // 1. Исправлено с justify на justifyContent
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '10px'
-  }}>
-    <button 
-      onClick={() => handleOpenFaq()} 
-      style={{
-        background: 'none',
-        border: 'none',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '11px',
-        cursor: 'pointer',
-        padding: 0
-      }}
-    >
-      Savol-javoblar (FAQ)
-    </button>
-
-    <span style={{ color: 'rgba(255, 255, 255, 0.2)', fontSize: '10px' }}>•</span>
-
-    <button 
-      onClick={() => handleOpenTerms()} 
-      style={{
-        background: 'none',
-        border: 'none',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '11px',
-        cursor: 'pointer',
-        padding: 0
-      }}
-    >
-      Foydalanish shartlari
-    </button>
-  </div>
-
-  {/* Копирайт и версия */}
-  <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.3)' }}>
-    © 2026 BITTA Platform. Barcha huquqlar himoyalangan.
-  </div>
-</footer>
-
-{/* ===================== МОДАЛКА FAQ ===================== */}
-{isFaqOpen && (
-  <div style={{
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    backdropFilter: 'blur(8px)',
-    zIndex: 1000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '16px'
-  }}>
-    <div style={{
-      background: '#181528',
-      border: '1px solid rgba(255, 255, 255, 0.12)',
-      borderRadius: '20px',
-      width: '100%',
-      maxWidth: '480px',
-      maxHeight: '80vh',
-      overflowY: 'auto',
-      padding: '20px',
-      color: '#FFFFFF'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Savol-javoblar (FAQ)</h3>
-        <button 
-          onClick={() => setIsFaqOpen(false)}
-          style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
-        >✕</button>
-      </div>
-
-      <div style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.8)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <div>
-          {/* 2. Цифра 1 перенесена внутрь <b> для единообразия */}
-          <b style={{ color: '#FFF' }}>1. Hisobni to'ldirish qanday amalga oshiriladi?</b>
-          <p style={{ margin: '4px 0 0 0' }}>Barcha xaridlar Player ID orqali to'g'ridan-to'g me'yoriy tartibda o'yinga tushiriladi. Parol berish shart emas.</p>
+      {/* ---------- FAQ / УСЛОВИЯ ---------- */}
+      {faqOpen && (
+        <div className="modal" onClick={() => setFaqOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{t("faq")}</h3>
+              <button className="icon-btn small-btn" onClick={() => setFaqOpen(false)}><Icon.Close /></button>
+            </div>
+            {faq.map(([q, a], i) => (
+              <div key={i} className="qa">
+                <b>{i + 1}. {q}</b>
+                <p>{a}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div>
-          <b style={{ color: '#FFF' }}>2. Valyuta qancha vaqtda tushadi?</b>
-          <p style={{ margin: '4px 0 0 0' }}>95% holatlarda to'lov qiliningach 1-5 daqiqa ichida tushadi. Ba'zan server yuklanishi sabab 24 soatgacha cho'zilishi mumkin.</p>
+      )}
+
+      {termsOpen && (
+        <div className="modal" onClick={() => setTermsOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{t("terms")}</h3>
+              <button className="icon-btn small-btn" onClick={() => setTermsOpen(false)}><Icon.Close /></button>
+            </div>
+            <div className="qa"><p>{t("terms1")}</p></div>
+            <div className="qa"><p>{t("terms2")}</p></div>
+            <div className="qa"><p>{t("terms3")}</p></div>
+          </div>
         </div>
-        <div>
-          <b style={{ color: '#FFF' }}>3. ID xato kiritilsa nima bo'ladi?</b>
-          <p style={{ margin: '4px 0 0 0' }}>To'lovdan oldin ID raqamingizni tekshiring. Agar valyuta noto'g'ri IDga tushgan bo'lsa, qaytarish imkonsiz.</p>
-        </div>
-        <div>
-          <b style={{ color: '#FFF' }}>4. Qanday to'lov turlari bor?</b>
-          <p style={{ margin: '4px 0 0 0' }}>Uzcard, Humo, Payme, Click va BITTA ichki balansi orqali to'lash mumkin.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-{/* ===================== МОДАЛКА OFERTA ===================== */}
-{isTermsOpen && (
-  <div style={{
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    backdropFilter: 'blur(8px)',
-    zIndex: 1000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '16px'
-  }}>
-    <div style={{
-      background: '#181528',
-      border: '1px solid rgba(255, 255, 255, 0.12)',
-      borderRadius: '20px',
-      width: '100%',
-      maxWidth: '480px',
-      maxHeight: '80vh',
-      overflowY: 'auto',
-      padding: '20px',
-      color: '#FFFFFF'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Foydalanish shartlari</h3>
-        <button 
-          onClick={() => setIsTermsOpen(false)}
-          style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#FFF', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer' }}
-        >✕</button>
-      </div>
-
-      <div style={{ fontSize: '12px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.7)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* 3. Цифра 1 внесена внутрь тега <p> */}
-        <p><b>1. Umumiy qoidalar:</b> BITTA platformasi raqamli xizmatlar va o'yin valyutalarini yetkazib beruvchi mustaqil servis hisoblanadi.</p>
-        <p><b>2. Mas'uliyat:</b> Foydalanuvchi kiritgan Player ID rekvizitlari to'g'riligiga o'zi javobgar. Noto'g'ri ID uchun mablag' qaytarilmaydi.</p>
-        <p><b>3. Qaytarish shartlari:</b> Muvaffaqiyatli yetkazilgan raqamli tovarlar qaytarib olinmaydi va almashtirilmaydi.</p>
-      </div>
-    </div>
-  </div>
-)}
-{/* ===================== НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (BOTTOM NAV) ===================== */}
-<div style={{
-  position: 'fixed',
-  bottom: '12px',
-  left: '16px',
-  right: '16px',
-  height: '62px',
-  backgroundColor: 'rgba(18, 14, 32, 0.85)',
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
-  borderRadius: '24px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-around',
-  zIndex: 1000,
-  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)'
-}}>
-  {/* 1. Bosh sahifa */}
-  <button
-    onClick={() => {
-      if (typeof haptic === 'function') haptic("light");
-      setActiveView("home");
-    }}
-    style={{
-      background: 'none',
-      border: 'none',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '3px',
-      color: activeView === 'home' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
-      cursor: 'pointer',
-      outline: 'none'
-    }}
-  >
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="2"/>
-      <rect x="14" y="3" width="7" height="7" rx="2"/>
-      <rect x="14" y="14" width="7" height="7" rx="2"/>
-      <rect x="3" y="14" width="7" height="7" rx="2"/>
-    </svg>
-    <span style={{ fontSize: '10px', fontWeight: activeView === 'home' ? '700' : '500' }}>Bosh sahifa</span>
-  </button>
-
-  {/* 2. Hamyon */}
-  <button
-    onClick={() => {
-      if (typeof haptic === 'function') haptic("light");
-      setActiveView("wallet");
-    }}
-    style={{
-      background: 'none',
-      border: 'none',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '3px',
-      color: activeView === 'wallet' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
-      cursor: 'pointer',
-      outline: 'none'
-    }}
-  >
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-      <path d="M18 12a2 2 0 0 0 0 4h4v-4z" />
-    </svg>
-    <span style={{ fontSize: '10px', fontWeight: activeView === 'wallet' ? '700' : '500' }}>Hamyon</span>
-  </button>
-
-  {/* 3. Tarix */}
-  <button
-    onClick={() => {
-      if (typeof haptic === 'function') haptic("light");
-      setActiveView("history");
-    }}
-    style={{
-      background: 'none',
-      border: 'none',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '3px',
-      color: activeView === 'history' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
-      cursor: 'pointer',
-      outline: 'none'
-    }}
-  >
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <polyline points="12 6 12 12 16 14"/>
-    </svg>
-    <span style={{ fontSize: '10px', fontWeight: activeView === 'history' ? '700' : '500' }}>Tarix</span>
-  </button>
-
-  {/* 4. Profil */}
-  <button
-    onClick={() => {
-      if (typeof haptic === 'function') haptic("light");
-      setActiveView("profile");
-    }}
-    style={{
-      background: 'none',
-      border: 'none',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '3px',
-      color: activeView === 'profile' ? '#A855F7' : 'rgba(255, 255, 255, 0.4)',
-      cursor: 'pointer',
-      outline: 'none'
-    }}
-  >
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
-    </svg>
-    <span style={{ fontSize: '10px', fontWeight: activeView === 'profile' ? '700' : '500' }}>Profil</span>
-  </button>
-</div>
-
-{/* ===================== AI УДАЛЁН ===================== */}
-
+      )}
     </div>
   );
 }
 
-// ===================== СТИЛИ (JS OBJECT) =====================
+// ===================== СТИЛИ =====================
 
-const styles: Record<string, React.CSSProperties> = {
-  aiFab: {
-    position: "fixed",
-    bottom: "20px",
-    right: "16px",
-    zIndex: 500,
-    display: "flex",
-    alignItems: "center",
-    gap: "7px",
-    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
-    color: "#FFF",
-    border: "none",
-    borderRadius: "999px",
-    padding: "12px 18px",
-    fontSize: "13px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  aiMessagesList: {
-    flex: 1,
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    padding: "14px 2px",
-  },
-  aiEmptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    textAlign: "center",
-    color: "#A79FC2",
-    fontSize: "13px",
-    lineHeight: 1.5,
-    padding: "30px 14px",
-  },
-  aiBubbleUser: {
-    alignSelf: "flex-end",
-    maxWidth: "82%",
-    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
-    color: "#FFF",
-    borderRadius: "14px 14px 2px 14px",
-    padding: "10px 13px",
-    fontSize: "13.5px",
-    lineHeight: 1.45,
-  },
-  aiBubbleAssistant: {
-    alignSelf: "flex-start",
-    maxWidth: "82%",
-    background: "rgba(255,255,255,0.06)",
-    color: "#E0D7F5",
-    borderRadius: "14px 14px 14px 2px",
-    padding: "10px 13px",
-    fontSize: "13.5px",
-    lineHeight: 1.45,
-    whiteSpace: "pre-wrap",
-  },
-  aiInputRow: {
-    display: "flex",
-    gap: "8px",
-    paddingTop: "10px",
-    borderTop: "1px solid rgba(255,255,255,0.08)",
-  },
-  aiInput: {
-    flex: 1,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "12px",
-    padding: "11px 14px",
-    color: "#FFF",
-    fontSize: "13.5px",
-    outline: "none",
-  },
-  aiSendBtn: {
-    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
-    border: "none",
-    borderRadius: "12px",
-    width: "44px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    cursor: "pointer",
-    flex: "0 0 auto",
-    boxShadow: "0 4px 14px rgba(185,139,255,0.3)",
-  },
-  container: {
-    minHeight: "100vh",
-    backgroundColor: "#120A21",
-    color: "#FFFFFF",
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    position: "relative",
-    overflowX: "hidden",
-    paddingBottom: "40px",
-  },
-  bgLayer: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    pointerEvents: "none",
-    zIndex: 0,
-    overflow: "hidden",
-  },
-  blob: {
-    position: "absolute",
-    borderRadius: "50%",
-    filter: "blur(65px)",
-    opacity: 0.35,
-  },
-  content: {
-    position: "relative",
-    zIndex: 1,
-    maxWidth: "480px",
-    margin: "0 auto",
-    padding: "16px 16px",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "16px",
-  },
-  logoWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-  },
-  logoDot: {
-    width: "28px",
-    height: "28px",
-    borderRadius: "8px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#fff",
-  },
-  logoText: {
-    fontSize: "20px",
-    fontWeight: 700,
-    background: "linear-gradient(135deg, #FFFFFF, #B98BFF)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  searchWrapper: {
-    flex: 1,
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-  },
-  searchIcon: {
-    position: "absolute",
-    left: "10px",
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: "#7E7694",
-    display: "flex",
-    alignItems: "center",
-  },
-  searchInput: {
-    width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.07)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
-    borderRadius: "12px",
-    padding: "8px 30px 8px 30px",
-    color: "#FFFFFF",
-    fontSize: "13px",
-    outline: "none",
-  },
-  clearSearchBtn: {
-    position: "absolute",
-    right: "8px",
-    background: "none",
-    border: "none",
-    color: "#A79FC2",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "4px",
-  },
-  topUpHeaderBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: "5px",
-    backgroundColor: "rgba(61, 220, 151, 0.12)",
-    border: "1px solid rgba(61, 220, 151, 0.3)",
-    color: "#3DDC97",
-    padding: "6px 10px",
-    borderRadius: "10px",
-    fontSize: "12px",
-    fontWeight: 700,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  burgerButton: {
-    width: "34px",
-    height: "34px",
-    borderRadius: "10px",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: "4px",
-    cursor: "pointer",
-  },
-  burgerLine: {
-    width: "18px",
-    height: "2px",
-    backgroundColor: "#FFFFFF",
-    borderRadius: "2px",
-  },
-  hero: {
-    padding: "16px 0",
-    marginBottom: "8px",
-  },
-  heroBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    fontSize: "11px",
-    fontWeight: 600,
-    color: "#B98BFF",
-    backgroundColor: "rgba(185, 139, 255, 0.12)",
-    padding: "4px 10px",
-    borderRadius: "20px",
-    marginBottom: "8px",
-  },
-  heroTitle: {
-    fontSize: "24px",
-    margin: "0 0 6px 0",
-    fontWeight: 700,
-  },
-  heroSub: {
-    fontSize: "13px",
-    color: "#A79FC2",
-    margin: 0,
-    lineHeight: 1.4,
-  },
-  sectionBlock: {
-    marginBottom: "18px",
-  },
-  sectionHeader: {
-    marginBottom: "10px",
-  },
-  sectionLabel: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    fontSize: "12px",
-    fontWeight: 700,
-    padding: "4px 10px",
-    borderRadius: "8px",
-  },
-  tileGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "10px",
-  },
-  tile: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    border: "1px solid rgba(255, 255, 255, 0.08)",
-    borderRadius: "16px",
-    padding: "14px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  tileIconBadge: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "10px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    marginBottom: "10px",
-  },
-  tileTitle: {
-    fontSize: "14px",
-    fontWeight: 700,
-    color: "#FFFFFF",
-  },
-  tileSub: {
-    fontSize: "11px",
-    color: "#A79FC2",
-    marginTop: "2px",
-  },
-  rowList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  row: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    border: "1px solid rgba(255, 255, 255, 0.08)",
-    borderRadius: "14px",
-    padding: "10px 12px",
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  rowIconBadge: {
-    width: "34px",
-    height: "34px",
-    borderRadius: "10px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    flexShrink: 0,
-  },
-  rowBody: {
-    flex: 1,
-  },
-  rowTitle: {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#FFFFFF",
-    display: "block",
-  },
-  rowSub: {
-    fontSize: "11px",
-    color: "#A79FC2",
-  },
-  arrowRight: {
-    display: "flex",
-    alignItems: "center",
-    color: "#7E7694",
-  },
-  vacancyGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "10px",
-  },
-  promoCard: {
-    background: "linear-gradient(135deg, rgba(185,139,255,0.12), rgba(110,107,255,0.06))",
-    border: "1px solid rgba(185, 139, 255, 0.25)",
-    borderRadius: "16px",
-    padding: "16px",
-    cursor: "pointer",
-  },
-  promoBadge: {
-    fontSize: "11px",
-    color: "#FFD166",
-    fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    marginBottom: "6px",
-  },
-  promoTitle: {
-    fontSize: "15px",
-    fontWeight: 700,
-    color: "#FFF",
-    marginBottom: "4px",
-  },
-  promoDesc: {
-    fontSize: "12px",
-    color: "#A79FC2",
-    lineHeight: 1.4,
-    marginBottom: "10px",
-  },
-  promoLinkBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    fontSize: "12px",
-    fontWeight: 700,
-    color: "#B98BFF",
-  },
-  backdrop: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    backdropFilter: "blur(4px)",
-    zIndex: 999,
-  },
-  bottomSheet: {
-    position: "fixed",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#1A102F",
-    borderTopLeftRadius: "24px",
-    borderTopRightRadius: "24px",
-    borderTop: "1px solid rgba(255,255,255,0.12)",
-    padding: "12px 20px 28px 20px",
-    zIndex: 1000,
-    maxWidth: "500px",
-    margin: "0 auto",
-  },
-  sheetIndicator: {
-    width: "36px",
-    height: "4px",
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: "2px",
-    margin: "0 auto 12px auto",
-  },
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "16px",
-  },
-  modalLogo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "17px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  closeModalBtn: {
-    background: "rgba(255,255,255,0.08)",
-    border: "none",
-    color: "#A79FC2",
-    width: "28px",
-    height: "28px",
-    borderRadius: "50%",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sheetBody: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  subLabel: {
-    fontSize: "12px",
-    color: "#A79FC2",
-    margin: "0 0 10px 0",
-  },
-  packGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "8px",
-  },
-  packCard: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "12px",
-    padding: "12px",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  packName: {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  packPrice: {
-    fontSize: "12px",
-    color: "#3DDC97",
-    fontWeight: 600,
-    marginTop: "4px",
-  },
-  inputLabel: {
-    fontSize: "12px",
-    color: "#A79FC2",
-    marginBottom: "6px",
-    display: "block",
-  },
-  input: {
-    width: "100%",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: "12px",
-    padding: "10px 12px",
-    color: "#FFF",
-    fontSize: "13px",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  quickAmountRow: {
-    display: "flex",
-    gap: "6px",
-    marginTop: "8px",
-  },
-  quickAmountBtn: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "8px",
-    color: "#B98BFF",
-    fontSize: "11px",
-    fontWeight: 600,
-    padding: "6px 0",
-    cursor: "pointer",
-  },
-  fileUploadBox: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px dashed rgba(185, 139, 255, 0.4)",
-    borderRadius: "12px",
-    padding: "14px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-    cursor: "pointer",
-    color: "#B98BFF",
-  },
-  paymentCard: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "14px",
-    padding: "14px",
-  },
-  paymentText: {
-    fontSize: "13px",
-    color: "#E0D7F5",
-    margin: "0 0 10px 0",
-  },
-  cardBox: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.3)",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    marginBottom: "6px",
-  },
-  cardNumber: {
-    fontSize: "15px",
-    fontWeight: 700,
-    letterSpacing: "1px",
-    color: "#FFF",
-  },
-  copyBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "5px",
-    backgroundColor: "rgba(185, 139, 255, 0.15)",
-    border: "none",
-    color: "#B98BFF",
-    fontSize: "11px",
-    fontWeight: 700,
-    padding: "5px 10px",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-  cardHolder: {
-    fontSize: "11px",
-    color: "#A79FC2",
-  },
-  btnRow: {
-    display: "flex",
-    gap: "8px",
-    marginTop: "14px",
-  },
-  btnBack: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    border: "none",
-    color: "#FFF",
-    borderRadius: "10px",
-    padding: "10px",
-    fontSize: "13px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  btnPrimary: {
-    flex: 1,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "6px",
-    border: "none",
-    color: "#FFF",
-    borderRadius: "10px",
-    padding: "10px",
-    fontSize: "13px",
-    fontWeight: 700,
-    cursor: "pointer",
-    boxShadow: "0 4px 14px rgba(185,139,255,0.3)",
-  },
-  orderSummary: {
-    fontSize: "13px",
-    color: "#A79FC2",
-    marginBottom: "12px",
-  },
-  successBox: {
-    textAlign: "center",
-    padding: "20px 10px",
-  },
-  successTitle: {
-    fontSize: "18px",
-    fontWeight: 700,
-    color: "#FFF",
-    marginBottom: "6px",
-  },
-  successSub: {
-    fontSize: "13px",
-    color: "#A79FC2",
-    lineHeight: 1.4,
-  },
-  eduInfoCard: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: "14px",
-    borderRadius: "12px",
-  },
-  tabRow: {
-    display: "flex",
-    gap: "6px",
-    marginBottom: "10px",
-  },
-  tabBtn: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    color: "#A79FC2",
-    padding: "8px",
-    borderRadius: "10px",
-    fontSize: "12px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  tabBtnActive: {
-    backgroundColor: "rgba(185, 139, 255, 0.2)",
-    borderColor: "#B98BFF",
-    color: "#FFF",
-  },
-  vacCard: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "12px",
-    padding: "10px 12px",
-  },
-  vacTitle: {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  vacBudget: {
-    fontSize: "11px",
-    color: "#3DDC97",
-    fontWeight: 700,
-  },
-  vacDesc: {
-    fontSize: "11px",
-    color: "#A79FC2",
-    margin: "4px 0 8px 0",
-  },
-  vacApplyBtn: {
-    width: "100%",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    border: "none",
-    color: "#FFF",
-    padding: "6px",
-    borderRadius: "8px",
-    fontSize: "11px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  drawer: {
-    position: "fixed",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: "270px",
-    backgroundColor: "#1A102F",
-    borderLeft: "1px solid rgba(255,255,255,0.1)",
-    padding: "20px",
-    zIndex: 1001,
-    display: "flex",
-    flexDirection: "column",
-  },
-  drawerHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
-  },
-  drawerTitle: {
-    fontSize: "18px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  drawerBody: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "16px",
-  },
-  menuBalanceCard: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "14px",
-    padding: "14px",
-  },
-  menuList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  menuItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    backgroundColor: "transparent",
-    border: "none",
-    color: "#E0D7F5",
-    fontSize: "13px",
-    textAlign: "left",
-    padding: "8px 0",
-    cursor: "pointer",
-  },
-  resultsSection: {
-    marginTop: "8px",
-  },
-  resultsHeader: {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#A79FC2",
-    marginBottom: "8px",
-  },
-  resultCard: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "12px",
-    padding: "10px",
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    cursor: "pointer",
-  },
-  resultIconBadge: {
-    width: "32px",
-    height: "32px",
-    borderRadius: "8px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-  },
-  resultBody: {
-    flex: 1,
-  },
-  resultGroup: {
-    fontSize: "10px",
-    color: "#B98BFF",
-    fontWeight: 700,
-  },
-  resultTitle: {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  resultDesc: {
-    fontSize: "11px",
-    color: "#A79FC2",
-  },
-  noResults: {
-    textAlign: "center",
-    color: "#A79FC2",
-    fontSize: "13px",
-    padding: "20px",
-  },
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-  // ===== Навигация (профиль/назад в хедере) =====
-  iconNavBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "36px",
-    height: "36px",
-    borderRadius: "10px",
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    color: "#FFF",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
+:root {
+  --bg: #0E0A1B;
+  --card: rgba(255,255,255,.055);
+  --line: rgba(255,255,255,.09);
+  --text: #FFFFFF;
+  --muted: #A79FC2;
+  --violet: linear-gradient(135deg,#B98BFF,#6E6BFF);
+  --green: #3DDC97;
+  --a: #B98BFF;
+  --a2: #6E6BFF;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); }
+button { font-family: inherit; color: inherit; }
 
-  // ===== Поиск на главной (вынесен из хедера, во всю ширину) =====
-  searchWrapperFull: {
-    position: "relative",
-    marginBottom: "18px",
-  },
-  searchInputFull: {
-    width: "100%",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "14px",
-    padding: "13px 40px",
-    color: "#FFF",
-    fontSize: "14px",
-    outline: "none",
-    boxSizing: "border-box",
-  },
+.app {
+  min-height: 100vh; position: relative; color: var(--text);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: var(--bg); overflow-x: hidden;
+}
+.bg { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .32; animation: float 10s ease-in-out infinite; }
+.b1 { width: 260px; height: 260px; top: -90px; left: -70px; background: #FF5F7E; }
+.b2 { width: 240px; height: 240px; top: 180px; right: -110px; background: #6E6BFF; animation-delay: 2s; }
+.b3 { width: 220px; height: 220px; bottom: 60px; left: -90px; background: #37E5C4; opacity: .2; animation-delay: 4s; }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-22px); } }
 
-  // ===== 3 крупные карточки-раздела на главной =====
-  categoryList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    marginBottom: "18px",
-  },
-  categoryCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: "16px",
-    padding: "14px",
-    cursor: "pointer",
-    textAlign: "left",
-    width: "100%",
-  },
-  categoryIconBadge: {
-    width: "46px",
-    height: "46px",
-    borderRadius: "13px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    flexShrink: 0,
-  },
-  categoryTextWrap: {
-    display: "flex",
-    flexDirection: "column",
-    flexGrow: 1,
-    minWidth: 0,
-  },
-  categoryTitle: {
-    fontSize: "14.5px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  categorySub: {
-    fontSize: "11.5px",
-    color: "#A79FC2",
-    marginTop: "2px",
-  },
+.header {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 16px; background: rgba(14,10,27,.72);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-dot { width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(135deg,#FF5F7E,#FF9D5C); flex-shrink: 0; }
+.brand-name { font-weight: 800; font-size: 19px; letter-spacing: -.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.balance-pill {
+  display: flex; align-items: center; gap: 7px; border: 0; cursor: pointer; padding: 8px 8px 8px 12px;
+  border-radius: 999px; background: var(--violet); font-weight: 700; font-size: 13px;
+  box-shadow: 0 6px 18px rgba(110,107,255,.35); white-space: nowrap;
+}
+.balance-pill .plus { width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.25); display: grid; place-items: center; font-size: 14px; line-height: 1; }
 
-  // ===== Крупные кнопки внутри раздела (O'yin & Market, Ishga Vakansiya) =====
-  bigTileList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    marginBottom: "20px",
-  },
-  bigTile: {
-    display: "flex",
-    alignItems: "center",
-    gap: "14px",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: "16px",
-    padding: "16px",
-    cursor: "pointer",
-    textAlign: "left",
-    width: "100%",
-  },
-  bigTileIconBadge: {
-    width: "52px",
-    height: "52px",
-    borderRadius: "15px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    flexShrink: 0,
-  },
+.content { position: relative; padding: 16px 16px 110px; max-width: 560px; margin: 0 auto; animation: fade .25s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-  // ===== Профиль =====
-  profileWrap: {
-    display: "flex",
-    flexDirection: "column",
-    paddingBottom: "20px",
-  },
-  profileCard: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    textAlign: "center",
-    padding: "22px 0 18px 0",
-  },
-  profileAvatarImg: {
-    width: "72px",
-    height: "72px",
-    borderRadius: "50%",
-    objectFit: "cover",
-    marginBottom: "10px",
-  },
-  profileAvatarFallback: {
-    width: "72px",
-    height: "72px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    marginBottom: "10px",
-  },
-  profileName: {
-    fontSize: "16px",
-    fontWeight: 700,
-    color: "#FFF",
-  },
-  profileUsername: {
-    fontSize: "12.5px",
-    color: "#A79FC2",
-    marginTop: "2px",
-  },
-  profileSectionLabel: {
-    fontSize: "11px",
-    fontWeight: 700,
-    color: "#7E7694",
-    textTransform: "uppercase",
-    letterSpacing: "0.4px",
-    margin: "18px 0 8px 2px",
-  },
-  langRow: {
-    display: "flex",
-    gap: "8px",
-  },
-  langPill: {
-    flex: 1,
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "10px",
-    padding: "9px",
-    color: "#A79FC2",
-    fontSize: "12px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  langPillActive: {
-    background: "linear-gradient(135deg,#B98BFF,#6E6BFF)",
-    borderColor: "transparent",
-    color: "#FFF",
-  },
+.hero { margin-bottom: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #D1B3FF; background: rgba(184,139,255,.12); border: 1px solid rgba(184,139,255,.25); }
+.hero h1 { font-size: 30px; line-height: 1.1; letter-spacing: -.8px; margin: 14px 0 6px; font-weight: 800; }
+.hero p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
-  // ===== Боковое меню: список разделов (вместо старого меню языка/поддержки) =====
-  drawerGroupLabel: {
-    fontSize: "11px",
-    fontWeight: 700,
-    color: "#7E7694",
-    textTransform: "uppercase",
-    letterSpacing: "0.4px",
-    margin: "14px 0 8px 2px",
-  },
-  menuNavList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  menuNavItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: "12px",
-    padding: "11px 12px",
-    cursor: "pointer",
-    textAlign: "left",
-    width: "100%",
-  },
-  menuNavIconBadge: {
-    width: "32px",
-    height: "32px",
-    borderRadius: "9px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#FFF",
-    flexShrink: 0,
-  },
-  menuNavText: {
-    fontSize: "13px",
-    fontWeight: 600,
-    color: "#FFF",
-    flexGrow: 1,
-  },
-};
+.section-title { font-size: 15px; font-weight: 700; margin: 0 0 12px; }
+.games { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 22px; }
+.game {
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 6px 6px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer;
+}
+.game img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 13px; }
+.game span { font-size: 11.5px; font-weight: 700; line-height: 1.15; text-align: center; }
+
+.promo {
+  width: 100%; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; padding: 16px;
+  border-radius: 20px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(185,139,255,.16), rgba(55,229,196,.08));
+}
+.promo-tag { font-size: 11px; font-weight: 700; color: var(--green); display: flex; align-items: center; gap: 5px; }
+.promo strong { font-size: 15px; }
+.promo small { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.promo-cta { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: #6CC4FF; margin-top: 4px; }
+
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; }
+.card-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.profile-card { text-align: center; }
+.avatar { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; margin: 0 auto 10px; display: block; border: 3px solid rgba(185,139,255,.5); }
+.avatar-fallback { display: grid; place-items: center; background: var(--violet); }
+.pname { font-size: 18px; font-weight: 800; }
+.puser { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.big-balance { font-size: 26px; font-weight: 800; color: var(--green); margin: 4px 0 14px; letter-spacing: -.5px; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; line-height: 1.5; }
+.tiny { font-size: 11px; margin: 6px 2px 0; line-height: 1.4; }
+.center { text-align: center; }
+.label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin: 10px 4px 0; }
+.label.first { margin: 0 0 12px; font-size: 14px; text-transform: none; letter-spacing: 0; color: rgba(255,255,255,.75); }
+
+.stats { display: flex; gap: 8px; margin: 12px 0; }
+.stat { flex: 1; text-align: center; padding: 10px 4px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--line); }
+.stat b { display: block; font-size: 19px; }
+.stat span { font-size: 10px; color: var(--muted); }
+
+.seg { display: flex; gap: 4px; padding: 4px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.seg button { flex: 1; border: 0; background: transparent; color: rgba(255,255,255,.6); padding: 10px 6px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .2s; }
+.seg button.on { background: #8B5CF6; color: #fff; box-shadow: 0 4px 14px rgba(139,92,246,.4); }
+.seg button:disabled { opacity: .4; cursor: not-allowed; }
+.seg.tabs { margin-bottom: 14px; }
+
+.list { padding: 4px; }
+.list-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 12px; background: none; border: 0; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; }
+.list-item span { flex: 1; }
+.list-item + .list-item { border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; }
+.copyright { text-align: center; font-size: 10.5px; color: rgba(255,255,255,.3); margin: 8px 0 0; }
+
+.btn { width: 100%; border: 0; border-radius: 16px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn:disabled { opacity: .6; cursor: default; }
+.btn-primary { background: var(--violet); color: #fff; box-shadow: 0 8px 22px rgba(110,107,255,.3); }
+.btn-accent { background: linear-gradient(135deg, var(--a), var(--a2)); color: #fff; box-shadow: 0 8px 24px color-mix(in srgb, var(--a) 40%, transparent); margin-top: 18px; }
+.btn-green { background: var(--green); color: #04130B; }
+
+.nav {
+  position: fixed; z-index: 30; left: 16px; right: 16px; bottom: calc(12px + env(safe-area-inset-bottom)); height: 64px; max-width: 528px; margin: 0 auto;
+  display: flex; justify-content: space-around; align-items: center; border-radius: 26px;
+  background: rgba(20,15,38,.86); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,255,255,.12); box-shadow: 0 12px 34px rgba(0,0,0,.5);
+}
+.nav-item { background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; color: rgba(255,255,255,.42); cursor: pointer; padding: 6px 10px; font-size: 10.5px; font-weight: 600; transition: color .2s, transform .2s; }
+.nav-item.active { color: #B98BFF; font-weight: 800; transform: translateY(-2px); }
+
+.sheet { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; animation: sheet .28s cubic-bezier(.2,.8,.2,1); }
+.sheet.top { z-index: 60; }
+@keyframes sheet { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); background: rgba(14,10,27,.9); }
+.sheet-title { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 16px; }
+.sheet-title img { width: 28px; height: 28px; border-radius: 8px; object-fit: cover; }
+.sheet-body { flex: 1; overflow-y: auto; padding: 16px 16px 40px; max-width: 560px; width: 100%; margin: 0 auto; }
+.icon-btn { width: 40px; height: 40px; border-radius: 13px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; cursor: pointer; }
+.small-btn { width: 30px; height: 30px; border-radius: 50%; }
+
+.packs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.pack {
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px 12px; min-height: 72px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; cursor: pointer; text-align: left;
+}
+.pack-text { min-width: 0; }
+.pack b { display: block; font-size: 13.5px; line-height: 1.2; }
+.pack span { display: block; margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--a); }
+.pack img { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
+
+.summary { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.summary img { width: 44px; height: 44px; object-fit: contain; }
+.summary > div:nth-child(2) { flex: 1; min-width: 0; }
+.summary b { font-size: 15px; }
+.price { text-align: right; display: flex; flex-direction: column; }
+.price s { font-size: 11px; color: var(--muted); }
+.price b { color: var(--a); font-size: 14px; white-space: nowrap; }
+.coupon { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 14px; border-radius: 14px; font-size: 12.5px; font-weight: 600; color: var(--green); background: rgba(61,220,151,.1); border: 1px solid rgba(61,220,151,.25); }
+
+.fields { display: flex; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.grow { flex: 1; }
+.field.zone { flex: 0 0 110px; }
+.field label { font-size: 12px; color: rgba(255,255,255,.65); font-weight: 600; }
+input {
+  width: 100%; padding: 14px; font-size: 16px; font-family: inherit; color: #fff; border-radius: 14px;
+  background: rgba(255,255,255,.06); border: 1px solid var(--line); outline: none; transition: box-shadow .2s, border-color .2s;
+}
+input::placeholder { color: rgba(255,255,255,.3); }
+input:focus { border-color: rgba(185,139,255,.6); box-shadow: 0 0 0 3px rgba(185,139,255,.2); }
+
+.error { margin-top: 14px; padding: 12px; border-radius: 14px; font-size: 12.5px; color: #FF9DAF; background: rgba(255,95,126,.1); border: 1px solid rgba(255,95,126,.25); display: flex; flex-direction: column; gap: 10px; line-height: 1.45; word-break: break-word; }
+.error .btn { color: #fff; }
+
+.quick { display: flex; gap: 8px; margin: 10px 0 14px; flex-wrap: wrap; }
+.quick button { flex: 1; min-width: 70px; padding: 10px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); font-size: 13px; font-weight: 700; cursor: pointer; }
+
+.copy-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 14px; margin: 10px 0; border-radius: 14px; background: rgba(0,0,0,.28); border: 1px solid var(--line); }
+.copy-box span { font-size: 17px; font-weight: 800; letter-spacing: .5px; }
+.copy-box button { border: 0; cursor: pointer; display: flex; align-items: center; gap: 5px; padding: 8px 12px; border-radius: 11px; background: var(--violet); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.warn { color: #FFD166; font-size: 12.5px; line-height: 1.5; margin: 8px 0 0; }
+.timer { text-align: center; font-size: 34px; font-weight: 800; margin: 22px 0 6px; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+
+.result { text-align: center; padding: 36px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.result h3 { margin: 10px 0 0; font-size: 21px; }
+.result p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.result .btn { margin-top: 6px; }
+.result.ok { color: var(--green); }
+.result.bad { color: #FF9DAF; }
+.result.warn-c { color: #FFD166; }
+.result h3 { color: var(--text); }
+.green { color: var(--green); }
+.check-path { stroke-dasharray: 46; stroke-dashoffset: 46; animation: draw .5s .15s cubic-bezier(.65,0,.35,1) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+.modal { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.72); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fade .2s; }
+.modal-card { width: 100%; max-width: 480px; max-height: 82vh; overflow-y: auto; padding: 20px; border-radius: 22px; background: #181528; border: 1px solid rgba(255,255,255,.12); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.modal-head h3 { margin: 0; font-size: 18px; }
+.qa { margin-bottom: 14px; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,.8); }
+.qa b { color: #fff; }
+.qa p { margin: 4px 0 0; }
+
+.press { transition: transform .15s cubic-bezier(.34,1.56,.64,1); }
+.press:active { transform: scale(.95); }
+`;
