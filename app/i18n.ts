@@ -2,7 +2,7 @@
 // Чтобы добавить каракалпакский: скопируйте блок `ru` ниже, назовите `kaa`,
 // переведите значения и добавьте "kaa" в тип Lang и в объект dict.
 
-export type Lang = "uz" | "ru";
+export type Lang = "uz" | "ru" | "en";
 
 const uz = {
   // навигация
@@ -100,7 +100,7 @@ const uz = {
   faq3q: "ID xato kiritilsa nima bo'ladi?",
   faq3a: "To'lovdan oldin ID ni tekshiring. Valyuta noto'g'ri ID ga tushgan bo'lsa, qaytarish imkonsiz.",
   faq4q: "Balansni qanday to'ldiraman?",
-  faq4a: "Humo kartasiga aniq summani o'tkazasiz — pul tushishi bilan balans avtomatik to'ldiriladi.",
+  faq4a: "Telegram Stars (yulduzlar) orqali — to'lov Telegram ichida amalga oshadi va balans darhol yangilanadi.",
   terms1: "1. Umumiy qoidalar: BITTA raqamli xizmatlar va o'yin valyutalarini yetkazib beruvchi mustaqil servisdir.",
   terms2: "2. Mas'uliyat: Foydalanuvchi kiritgan Player ID to'g'riligiga o'zi javobgar. Noto'g'ri ID uchun mablag' qaytarilmaydi.",
   terms3: "3. Qaytarish: Muvaffaqiyatli yetkazilgan raqamli tovarlar qaytarib olinmaydi va almashtirilmaydi.",
@@ -119,6 +119,16 @@ const uz = {
   starsFailed: "To'lov amalga oshmadi, qayta urinib ko'ring",
   starsError: "Hisob yaratib bo'lmadi, birozdan keyin urinib ko'ring",
   starsOnlyTelegram: "Yulduzlar bilan to'lash faqat Telegram ichida ishlaydi",
+
+  // вход на сайте
+  loginTitle: "Telegram orqali kiring",
+  loginText: "Hisobingiz va balansingiz Telegramdagi bilan bir xil bo'ladi.",
+  loginHint: "Tugma ko'rinmasa, sahifani yangilang yoki brauzerda VPN/reklama bloklovchini o'chiring.",
+  logout: "Chiqish",
+  faq4aWeb: "Karta orqali: aniq summani o'tkazasiz, pul tushishi bilan balans avtomatik to'ldiriladi.",
+  signIn: "Kirish",
+  loginRequiredBuy: "Sotib olish uchun kiring",
+  loginRequiredView: "Bu bo'limni ko'rish uchun Telegram orqali kiring.",
 };
 
 const ru: typeof uz = {
@@ -211,7 +221,7 @@ const ru: typeof uz = {
   faq3q: "Что если я ввёл неверный ID?",
   faq3a: "Проверяйте ID до оплаты. Если валюта ушла на неверный ID, вернуть её невозможно.",
   faq4q: "Как пополнить баланс?",
-  faq4a: "Переводите точную сумму на карту Humo — как только деньги поступят, баланс пополнится автоматически.",
+  faq4a: "Через Telegram Stars (звёзды) — оплата проходит внутри Telegram, баланс обновляется сразу.",
   terms1: "1. Общие положения: BITTA — независимый сервис доставки цифровых услуг и игровой валюты.",
   terms2: "2. Ответственность: пользователь сам отвечает за правильность введённого Player ID. За неверный ID средства не возвращаются.",
   terms3: "3. Возврат: успешно доставленные цифровые товары возврату и обмену не подлежат.",
@@ -228,9 +238,137 @@ const ru: typeof uz = {
   starsFailed: "Платёж не прошёл, попробуйте ещё раз",
   starsError: "Не удалось создать счёт, попробуйте позже",
   starsOnlyTelegram: "Оплата звёздами работает только внутри Telegram",
+
+  loginTitle: "Войдите через Telegram",
+  loginText: "Ваш аккаунт и баланс будут теми же, что и в Telegram.",
+  loginHint: "Если кнопка не появилась, обновите страницу или отключите VPN/блокировщик рекламы.",
+  logout: "Выйти",
+  faq4aWeb: "Картой: переводите точную сумму, как только деньги поступят — баланс пополнится автоматически.",
+  signIn: "Войти",
+  loginRequiredBuy: "Войдите, чтобы купить",
+  loginRequiredView: "Войдите через Telegram, чтобы открыть этот раздел.",
 };
 
-export const dict: Record<Lang, typeof uz> = { uz, ru };
+
+const en: typeof uz = {
+  navHome: "Home",
+  navWallet: "Wallet",
+  navHistory: "History",
+  navProfile: "Profile",
+
+  heroBadge: "Everything in one app",
+  heroTitle: "Game currency",
+  heroSub: "Fast, easy and reliable. By Player ID — no password needed.",
+  gamesTitle: "Games & services",
+  promoTag: "Advertising",
+  promoTitle: "Promote your brand on Bitta!",
+  promoText: "Show your channel, bot or service to thousands of active users.",
+  promoCta: "Contact us (@bitta_mngr)",
+
+  choosePack: "Choose a pack",
+  selectedPack: "Selected pack",
+  couponApplied: "Coupon −{p}% will be applied automatically",
+  youPay: "To pay",
+  buy: "Buy",
+  sending: "Sending...",
+  back: "Back",
+  enterId: "Please enter an ID",
+  idPubg: "Player ID",
+  idFreefire: "Player ID",
+  idBloodstrike: "Player ID",
+  idPremium: "Telegram username",
+  idMlbb: "User ID",
+  zoneId: "Zone ID",
+  idHintPremium: "Username of the account that will receive Premium",
+  idHintDefault: "Double-check the ID before paying",
+  months: "mo.",
+  orderAccepted: "Order accepted!",
+  orderAcceptedSub: "Your order will be completed soon and you will be notified.",
+  ok: "Got it",
+  topUpAccount: "Top up balance",
+  errNoBalance: "Insufficient balance.",
+  errNetwork: "Could not reach the server.",
+  errGeneric: "Something went wrong. Please try again.",
+
+  topUpTitle: "Top up balance",
+  topUpAmountLabel: "Amount (UZS)",
+  topUpPlaceholder: "For example: 50000",
+  topUpInfo: "On the next step we will show the card number and the exact amount to transfer. The balance is credited automatically once the money arrives.",
+  next: "Continue",
+  enterAmount: "Please enter the amount!",
+  amountRange: "The amount must be between {min} and {max} UZS",
+  tooBusy: "Busy right now, please try again shortly",
+  errorPrefix: "Error",
+  networkErrorPrefix: "Network error",
+  payToCard: "Transfer exactly this amount to the card:",
+  cardOwner: "Card holder",
+  transferAmount: "Transfer amount (UZS)",
+  copy: "Copy",
+  copied: "Copied!",
+  dontChangeAmount: "Do not change the amount! It must match exactly, otherwise the payment will not be recognised automatically.",
+  autoCredit: "The balance is credited automatically when the money arrives — you can close this window.",
+  timeUp: "Time is up",
+  timeUpSub: "If you have already paid, wait a few minutes or message @bitta_mngr. Otherwise, try again.",
+  retry: "Try again",
+  topUpDone: "Balance topped up!",
+  currentBalance: "Current balance",
+  rejected: "Request rejected",
+  rejectedSub: "The payment was not confirmed. If this is a mistake, message @bitta_mngr or try again.",
+
+  user: "User",
+  yourBalance: "Your balance",
+  refTitle: "Invite friends",
+  refText: "When a friend buys any pack, you get a −{p}% coupon for your next purchase — for every friend.",
+  refInvited: "Invited",
+  refBought: "Purchased",
+  refCoupons: "Coupons",
+  refButton: "Invite friends",
+  refShareText: "Bitta: game currency at great prices! Join via my link:",
+  language: "Language",
+  langSoon: "Karakalpak language is coming soon.",
+  help: "Help",
+  support: "Support (@bitta_mngr)",
+  channel: "Official channel",
+
+  faq: "FAQ",
+  terms: "Terms of use",
+  copyright: "© 2026 BITTA. All rights reserved.",
+  faq1q: "How does a purchase work?",
+  faq1a: "You top up your balance, choose a pack and enter your Player ID. The currency goes straight to your game account — no password needed.",
+  faq2q: "How fast does the currency arrive?",
+  faq2a: "Usually within 1–5 minutes. Sometimes longer because of server load.",
+  faq3q: "What if I enter a wrong ID?",
+  faq3a: "Check the ID before paying. If the currency went to a wrong ID, it cannot be returned.",
+  faq4q: "How do I top up my balance?",
+  faq4a: "With Telegram Stars — payment happens inside Telegram and your balance updates instantly.",
+  terms1: "1. General: BITTA is an independent service that delivers digital services and game currency.",
+  terms2: "2. Responsibility: the user is responsible for the Player ID they enter. Funds are not refunded for a wrong ID.",
+  terms3: "3. Refunds: digital goods that were delivered successfully cannot be returned or exchanged.",
+
+  tabUC: "UC",
+  tabShop: "Shop",
+
+  methodCard: "Card",
+  methodStars: "Telegram Stars",
+  starsInfo: "Pay with Stars right inside Telegram — your balance is topped up instantly.",
+  starsPay: "Pay with Stars",
+  starsPaid: "Payment received! Updating balance...",
+  starsCancelled: "Payment cancelled",
+  starsFailed: "Payment failed, please try again",
+  starsError: "Could not create the invoice, please try later",
+  starsOnlyTelegram: "Paying with Stars only works inside Telegram",
+
+  loginTitle: "Sign in with Telegram",
+  loginText: "Your account and balance will be the same as in Telegram.",
+  loginHint: "If the button does not appear, refresh the page or turn off VPN / ad blocker.",
+  logout: "Log out",
+  faq4aWeb: "By card: transfer the exact amount and your balance is credited automatically once the money arrives.",
+  signIn: "Sign in",
+  loginRequiredBuy: "Sign in to buy",
+  loginRequiredView: "Sign in with Telegram to open this section.",
+};
+
+export const dict: Record<Lang, typeof uz> = { uz, ru, en };
 export type Dict = typeof uz;
 export type TKey = keyof Dict;
 

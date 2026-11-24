@@ -27,7 +27,16 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [deposits, setDeposits] = useState<any[]>([]);
 
-  const initData = () => (typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initData ?? "" : "");
+  const initData = () => {
+    if (typeof window === "undefined") return "";
+    const tgData = (window as any).Telegram?.WebApp?.initData;
+    if (tgData) return tgData;
+    try {
+      return localStorage.getItem("bitta_web_token") || ""; // вход с сайта
+    } catch {
+      return "";
+    }
+  };
 
   const api = async (payload: Record<string, any>) => {
     const res = await fetch("/api/admin", {

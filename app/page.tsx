@@ -164,6 +164,22 @@ const Icon = {
 
 // ===================== ВСПОМОГАТЕЛЬНОЕ =====================
 
+// Достаём данные пользователя из токена сайта (только для показа; проверку делает сервер)
+function parseWebToken(token: string): any | null {
+  try {
+    if (!token.startsWith("web.")) return null;
+    const body = token.split(".")[1];
+    const json = decodeURIComponent(
+      escape(atob(body.replace(/-/g, "+").replace(/_/g, "/")))
+    );
+    const data = JSON.parse(json);
+    if (!data?.id || !data?.exp || data.exp * 1000 < Date.now()) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 const fmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
 const CARD_NUMBER = "9860196619614445";
@@ -171,6 +187,24 @@ const CARD_NUMBER_VIEW = "9860 1966 1961 4445";
 const CARD_OWNER = "MUSA X.";
 
 type TopUpStatus = "idle" | "submitting" | "pending" | "approved" | "rejected" | "error";
+
+// ===================== ЭКРАН ЗАГРУЗКИ =====================
+// Единичка падает сверху и врезается в «B» (желе), потом — «bitta».
+// Если сайт грузится долго, внизу крутится кружок.
+
+function Splash({ spinner, leaving }: { spinner: boolean; leaving: boolean }) {
+  return (
+    <div className={`splash ${leaving ? "leaving" : ""}`} aria-hidden="true">
+      <div className="stage">
+        <span className="ring" />
+        <div className="tile"><span>B</span></div>
+        <span className="one">1</span>
+      </div>
+      <div className="word">bitta</div>
+      <div className={`spinner ${spinner ? "on" : ""}`} />
+    </div>
+  );
+}
 
 // ===================== КОМПОНЕНТ =====================
 
@@ -180,11 +214,40 @@ export default function Home() {
   const t = (key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars);
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  // Внутри Telegram цифровые товары можно оплачивать только звёздами (правила Telegram)
 
   // ---- общее ----
   const [view, setView] = useState<View>("home");
   const [balance, setBalance] = useState(0);
   const [tgUser, setTgUser] = useState<any>(null);
+  const starsOnly = !!tgUser;
+
+  // Режим сайта (открыто не из Telegram): вход через виджет Telegram
+  const [booted, setBooted] = useState(false);
+  const [webMode, setWebMode] = useState(false);
+  const [webUser, setWebUser] = useState<any>(null);
+  const [loginError, setLoginError] = useState("");
+  const loginBox = useRef<HTMLDivElement | null>(null);
+  const user = tgUser || webUser; // кто вошёл (в Telegram или на сайте)
+  const guest = booted && webMode && !webUser; // сайт без входа: можно смотреть каталог, но не покупать
+  const [loginOpen, setLoginOpen] = useState(false);
+  const requireLogin = () => setLoginOpen(true);
+  const needLogin = guest && loginOpen;
+
+  // Экран загрузки: минимум ~2.7 сек (чтобы доиграла анимация), дальше ждём загрузку
+  const [splashDone, setSplashDone] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
+  useEffect(() => {
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const id = setTimeout(() => setSplashDone(true), reduce ? 500 : 2700);
+    return () => clearTimeout(id);
+  }, []);
+  useEffect(() => {
+    if (!(splashDone && booted)) return;
+    const id = setTimeout(() => setSplashGone(true), 380);
+    return () => clearTimeout(id);
+  }, [splashDone, booted]);
+  const splash = splashGone ? null : <Splash spinner={splashDone && !booted} leaving={splashDone && booted} />;
   const [referral, setReferral] = useState<{ invited: number; earned: number; available: number; percent: number } | null>(null);
   const [faqOpen, setFaqOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
@@ -244,6 +307,10 @@ export default function Home() {
     if (!initData) return;
     try {
       const res = await fetch(`/api/deposit?initData=${encodeURIComponent(initData)}`);
+      if (res.status === 401 && webMode) {
+        logout();
+        return;
+      }
       const data = await res.json();
       if (res.ok && typeof data.balance === "number") setBalance(data.balance);
     } catch {
@@ -271,20 +338,55 @@ export default function Home() {
     const boot = () => {
       if (started) return;
       started = true;
-      const tg = window.Telegram?.WebApp;
-      try {
-        tg?.ready();
-        tg?.expand();
-      } catch {}
-      setTgUser(tg?.initDataUnsafe?.user ?? null);
+      let tg = window.Telegram?.WebApp;
+      const inTelegram = !!tg?.initData;
+
+      if (!inTelegram) {
+        // ---- СЕЙТ (не Telegram): берём сохранённый токен входа ----
+        setWebMode(true);
+        let token = "";
+        try {
+          token = localStorage.getItem("bitta_web_token") || "";
+        } catch {}
+        const payload = parseWebToken(token);
+        if (payload) {
+          // подставляем «мини-Telegram», чтобы все компоненты читали initData как обычно
+          window.Telegram = {
+            WebApp: {
+              initData: token,
+              initDataUnsafe: { user: payload },
+              ready() {},
+              expand() {},
+              openLink: (u: string) => window.open(u, "_blank"),
+              openTelegramLink: (u: string) => window.open(u, "_blank"),
+            },
+          };
+          tg = window.Telegram.WebApp;
+          setWebUser(payload);
+        } else if (token) {
+          try {
+            localStorage.removeItem("bitta_web_token");
+          } catch {}
+        }
+      } else {
+        try {
+          tg?.ready();
+          tg?.expand();
+        } catch {}
+        setTgUser(tg?.initDataUnsafe?.user ?? null);
+      }
 
       // язык: сохранённый выбор → язык Telegram → uz
       let saved: string | null = null;
       try {
         saved = localStorage.getItem("bitta_lang");
       } catch {}
-      if (saved === "uz" || saved === "ru") setLang(saved);
-      else if (tg?.initDataUnsafe?.user?.language_code === "ru") setLang("ru");
+      const browserLang = (tg?.initDataUnsafe?.user?.language_code || navigator.language || "").slice(0, 2).toLowerCase();
+      if (saved === "uz" || saved === "ru" || saved === "en") setLang(saved);
+      else if (browserLang === "ru") setLang("ru");
+      else if (browserLang === "en") setLang("en");
+
+      setBooted(true);
 
       const initData = tg?.initData ?? "";
       if (!initData) return;
@@ -329,6 +431,51 @@ export default function Home() {
     document.body.appendChild(script);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Кнопка «Войти через Telegram» (виджет рисуется на экране входа)
+  useEffect(() => {
+    if (!needLogin || !loginBox.current) return;
+    (window as any).onBittaTelegramAuth = async (tgUserData: any) => {
+      setLoginError("");
+      try {
+        const res = await fetch("/api/auth/telegram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: tgUserData }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.token) {
+          setLoginError(`${t("errorPrefix")}: ${data.error ?? res.status}`);
+          return;
+        }
+        try {
+          localStorage.setItem("bitta_web_token", data.token);
+        } catch {}
+        window.location.reload();
+      } catch {
+        setLoginError(t("errNetwork"));
+      }
+    };
+    const box = loginBox.current;
+    box.innerHTML = "";
+    const s = document.createElement("script");
+    s.src = "https://telegram.org/js/telegram-widget.js?22";
+    s.async = true;
+    s.setAttribute("data-telegram-login", "bitta_hub_bot");
+    s.setAttribute("data-size", "large");
+    s.setAttribute("data-radius", "14");
+    s.setAttribute("data-request-access", "write");
+    s.setAttribute("data-onauth", "onBittaTelegramAuth(user)");
+    box.appendChild(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needLogin]);
+
+  const logout = () => {
+    try {
+      localStorage.removeItem("bitta_web_token");
+    } catch {}
+    window.location.reload();
+  };
 
   const chooseLang = (l: Lang) => {
     haptic("light");
@@ -381,8 +528,13 @@ export default function Home() {
   // ===================== ПОПОЛНЕНИЕ =====================
 
   const openTopUp = () => {
+    if (guest) {
+      requireLogin();
+      return;
+    }
     haptic("light");
     setTopUpOpen(true);
+    if (starsOnly) setTopUpMethod("stars");
     setStarsMsg(null);
     setTopUpStatus("idle");
     setTopUpError("");
@@ -552,6 +704,10 @@ export default function Home() {
   const finalPrice = (p: number) => (hasCoupon ? Math.round((p * (100 - referral!.percent)) / 100) : p);
 
   const buy = async () => {
+    if (guest) {
+      requireLogin();
+      return;
+    }
     if (!playerId.trim()) {
       haptic("medium");
       setBuyError({ text: t("enterId"), noBalance: false });
@@ -604,9 +760,9 @@ export default function Home() {
   };
 
   const shareReferral = () => {
-    if (!tgUser?.id) return;
+    if (!user?.id) return;
     haptic("light");
-    const link = `https://t.me/bitta_hub_bot?startapp=ref_${tgUser.id}`;
+    const link = `https://t.me/bitta_hub_bot?startapp=ref_${user.id}`;
     openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t("refShareText"))}`);
   };
 
@@ -637,16 +793,35 @@ export default function Home() {
     { id: "profile", label: t("navProfile"), icon: <Icon.User /> },
   ];
 
+  const guestCard = (
+    <div className="card center" style={{ alignItems: "center", textAlign: "center", padding: 24, gap: 12 }}>
+      <span className="brand-dot big"><Icon.User /></span>
+      <p className="muted" style={{ margin: 0 }}>{t("loginRequiredView")}</p>
+      <button className="btn btn-primary press" onClick={requireLogin}>{t("signIn")}</button>
+    </div>
+  );
+
   const faq = [
     [t("faq1q"), t("faq1a")],
     [t("faq2q"), t("faq2a")],
     [t("faq3q"), t("faq3a")],
-    [t("faq4q"), t("faq4a")],
+    [t("faq4q"), webMode ? t("faq4aWeb") : t("faq4a")],
   ];
+
+  // Первый кадр: ждём, пока определится, где открыто приложение (Telegram или сайт)
+  if (!booted) {
+    return (
+      <div className="app">
+        <style dangerouslySetInnerHTML={{ __html: CSS }} />
+        {splash}
+      </div>
+    );
+  }
 
   return (
     <div className="app">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      {splash}
 
       <div className="bg" aria-hidden="true">
         <i className="blob b1" />
@@ -654,17 +829,43 @@ export default function Home() {
         <i className="blob b3" />
       </div>
 
+      {/* ---------- ОКНО ВХОДА (сайт, гость) ---------- */}
+      {needLogin && (
+        <div className="sheet top">
+          <div className="sheet-top">
+            <button className="icon-btn press" onClick={() => setLoginOpen(false)} aria-label={t("back")}><Icon.Back /></button>
+            <div className="sheet-title"><span>bitta</span></div>
+            <span style={{ width: 40 }} />
+          </div>
+          <div className="sheet-body login-body">
+            <span className="brand-dot big"><Icon.Sparkle /></span>
+            <h2>{t("loginTitle")}</h2>
+            <p className="muted">{t("loginText")}</p>
+            <div ref={loginBox} className="login-box" />
+            {loginError && <div className="error"><span>{loginError}</span></div>}
+            <p className="muted tiny">{t("loginHint")}</p>
+          </div>
+        </div>
+      )}
+
       {/* ---------- ХЕДЕР ---------- */}
       <header className="header">
         <div className="brand">
           <span className="brand-dot"><Icon.Sparkle /></span>
           <span className="brand-name">{titles[view]}</span>
         </div>
-        <button className="balance-pill press" onClick={openTopUp}>
-          <Icon.Wallet size={16} />
-          <span>{fmt(balance)} UZS</span>
-          <span className="plus">+</span>
-        </button>
+        {guest ? (
+          <button className="balance-pill press" onClick={requireLogin}>
+            <Icon.User />
+            <span>{t("signIn")}</span>
+          </button>
+        ) : (
+          <button className="balance-pill press" onClick={openTopUp}>
+            <Icon.Wallet size={16} />
+            <span>{fmt(balance)} UZS</span>
+            <span className="plus">+</span>
+          </button>
+        )}
       </header>
 
       <main className="content">
@@ -697,24 +898,28 @@ export default function Home() {
         )}
 
         {/* ---------- КОШЕЛЁК ---------- */}
-        {view === "wallet" && <WalletView balance={balance} onOpenDeposit={openTopUp} />}
+        {view === "wallet" && (guest ? guestCard : <WalletView balance={balance} onOpenDeposit={openTopUp} />)}
 
         {/* ---------- ИСТОРИЯ ---------- */}
-        {view === "history" && <HistoryView telegramId={tgUser?.id || 0} />}
+        {view === "history" && (guest ? guestCard : <HistoryView telegramId={user?.id || 0} />)}
 
         {/* ---------- ПРОФИЛЬ ---------- */}
         {view === "profile" && (
           <div className="stack">
+            {guest ? (
+              guestCard
+            ) : (
+              <>
             <div className="card profile-card">
-              {tgUser?.photo_url ? (
-                <img className="avatar" src={tgUser.photo_url} alt="" />
+              {user?.photo_url ? (
+                <img className="avatar" src={user.photo_url} alt="" />
               ) : (
                 <div className="avatar avatar-fallback"><Icon.User /></div>
               )}
               <div className="pname">
-                {tgUser?.first_name || t("user")} {tgUser?.last_name || ""}
+                {user?.first_name || t("user")} {user?.last_name || ""}
               </div>
-              {tgUser?.username && <div className="puser">@{tgUser.username}</div>}
+              {user?.username && <div className="puser">@{user.username}</div>}
             </div>
 
             <div className="card">
@@ -743,10 +948,14 @@ export default function Home() {
               <button className="btn btn-primary press" onClick={shareReferral}>{t("refButton")}</button>
             </div>
 
+              </>
+            )}
+
             <div className="label">{t("language")}</div>
-            <div className="seg">
+            <div className="seg lang">
               <button className={lang === "uz" ? "on" : ""} onClick={() => chooseLang("uz")}>O'zbekcha</button>
               <button className={lang === "ru" ? "on" : ""} onClick={() => chooseLang("ru")}>Русский</button>
+              <button className={lang === "en" ? "on" : ""} onClick={() => chooseLang("en")}>English</button>
               <button disabled title="soon">Qaraqalpaq</button>
             </div>
             <p className="muted tiny">{t("langSoon")}</p>
@@ -771,6 +980,9 @@ export default function Home() {
                 <Icon.Sparkle /> <span>{t("terms")}</span> <Icon.Chevron />
               </button>
             </div>
+            {webMode && !guest && (
+              <button className="btn ghost press" onClick={logout}>{t("logout")}</button>
+            )}
             <p className="copyright">{t("copyright")}</p>
           </div>
         )}
@@ -914,7 +1126,7 @@ export default function Home() {
                 )}
 
                 <button className="btn btn-accent press" disabled={buying} onClick={() => { haptic("medium"); buy(); }}>
-                  {buying ? t("sending") : `${t("buy")} · ${fmt(finalPrice(pack.price))} UZS`}
+                  {guest ? t("loginRequiredBuy") : buying ? t("sending") : `${t("buy")} · ${fmt(finalPrice(pack.price))} UZS`}
                 </button>
               </>
             )}
@@ -945,7 +1157,7 @@ export default function Home() {
           </div>
 
           <div className="sheet-body">
-            {(topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
+            {false && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
               <div className="seg" style={{ marginBottom: 16 }}>
                 <button className={topUpMethod === "card" ? "on" : ""} onClick={() => { haptic("light"); setTopUpMethod("card"); }}>
                   {t("methodCard")}
@@ -956,7 +1168,7 @@ export default function Home() {
               </div>
             )}
 
-            {topUpMethod === "stars" && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
+            {(starsOnly || topUpMethod === "stars") && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
               <>
                 <p className="muted small">{t("starsInfo")}</p>
                 <div className="packs" style={{ marginTop: 12 }}>
@@ -984,7 +1196,7 @@ export default function Home() {
               </>
             )}
 
-            {topUpMethod === "card" && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
+            {!starsOnly && topUpMethod === "card" && (topUpStatus === "idle" || topUpStatus === "submitting" || topUpStatus === "error") && (
               <>
                 <div className="field">
                   <label>{t("topUpAmountLabel")}</label>
@@ -1300,6 +1512,58 @@ input:focus { border-color: rgba(185,139,255,.6); box-shadow: 0 0 0 3px rgba(185
 .qa b { color: #fff; }
 .qa p { margin: 4px 0 0; }
 
+/* ---- экран загрузки ---- */
+.splash { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: var(--bg); transition: opacity .35s ease; overflow: hidden; }
+.splash.leaving { opacity: 0; pointer-events: none; }
+.splash .stage { position: relative; width: 124px; height: 124px; }
+.splash .tile {
+  position: absolute; inset: 0; border-radius: 36px; display: grid; place-items: center;
+  background: linear-gradient(135deg, #FF5F7E, #FF9D5C); box-shadow: 0 18px 50px rgba(255,95,126,.4);
+  transform-origin: 50% 100%; animation: jelly 1.5s .95s both;
+}
+.splash .tile span { font-size: 78px; font-weight: 800; line-height: 1; color: #fff; letter-spacing: -2px; text-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.splash .one {
+  position: absolute; left: 50%; top: 50%; margin: -52px 0 0 -26px; font-size: 104px; font-weight: 800; line-height: 1;
+  background: linear-gradient(180deg, #FFE08A, #FF9D5C); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 8px 14px rgba(255,157,92,.55)); opacity: 0; animation: drop 1.05s .12s cubic-bezier(.5,0,.9,.55) both;
+}
+.splash .ring { position: absolute; inset: -4px; border-radius: 40px; border: 3px solid rgba(255,255,255,.7); opacity: 0; animation: ring .6s .95s ease-out both; }
+.splash .word { font-size: 26px; font-weight: 800; letter-spacing: -.6px; opacity: 0; animation: wordIn .5s 1.7s ease-out both; }
+.splash .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.14); border-top-color: #B98BFF; opacity: 0; transition: opacity .3s; animation: spin .8s linear infinite; }
+.splash .spinner.on { opacity: 1; }
+
+@keyframes drop {
+  0%   { opacity: 0; transform: translateY(-60vh) scale(.85) rotate(-18deg); }
+  10%  { opacity: 1; }
+  80%  { opacity: 1; transform: translateY(0) scale(1.05) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(10px) scale(.15) rotate(0deg); }
+}
+@keyframes jelly {
+  0%   { transform: scale(1, 1); }
+  12%  { transform: scale(1.3, .66); }
+  28%  { transform: scale(.86, 1.22); }
+  44%  { transform: scale(1.13, .9); }
+  60%  { transform: scale(.95, 1.06); }
+  78%  { transform: scale(1.03, .98); }
+  100% { transform: scale(1, 1); }
+}
+@keyframes ring { 0% { opacity: .8; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.7); } }
+@keyframes wordIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash .one, .splash .ring { display: none; }
+  .splash .tile, .splash .word { animation: none; opacity: 1; }
+}
+
+.login-body { text-align: center; display: flex; flex-direction: column; align-items: center; padding-top: 40px; }
+.login-body h2 { margin: 6px 0; font-size: 20px; }
+.seg.lang button { font-size: 11.5px; padding: 10px 2px; }
+.brand-dot.big { width: 64px; height: 64px; border-radius: 22px; margin: 0 auto 12px; }
+.content.login { text-align: center; padding-top: 80px; display: flex; flex-direction: column; align-items: center; }
+.content.login h1 { margin: 0; font-size: 34px; letter-spacing: -1px; }
+.content.login h2 { margin: 18px 0 6px; font-size: 20px; }
+.login-box { margin: 18px 0 8px; min-height: 48px; display: flex; justify-content: center; }
+.btn.ghost { background: var(--card); border: 1px solid var(--line); color: var(--muted); margin-top: 6px; }
 .press { transition: transform .15s cubic-bezier(.34,1.56,.64,1); }
 .press:active { transform: scale(.95); }
 `;
